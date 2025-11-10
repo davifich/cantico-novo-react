@@ -1,142 +1,131 @@
-import { router } from 'expo-router';
-import { Music } from 'lucide-react-native';
-import React, { useMemo, useCallback, memo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar } from 'react-native';
 
-import FloatingNavMenu from '@/components/FloatingNavMenu';
+import { router } from 'expo-router';
+import React, { useMemo, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  StatusBar,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+import SongListItem from '@/components/SongListItem'; // Importa o componente reutilizável
 import Colors from '@/constants/colors';
 import { useApp } from '@/contexts/AppContext';
-import type { Music as MusicType } from '@/types/music';
+import { Music } from '@/types/music';
 
-const SongListItem = memo(({
-  song,
-  colors,
-  onPress,
-}: {
-  song: MusicType;
-  colors: typeof Colors.light;
-  onPress: () => void;
-}) => (
-  <TouchableOpacity
-    style={[styles.songCard, { backgroundColor: colors.card }]}
-    onPress={onPress}
-  >
-    <View style={[styles.iconCircle, { backgroundColor: colors.primary }]}>
-      <Music size={18} color={colors.secondary} />
-    </View>
-    <View style={styles.songInfo}>
-      <Text style={[styles.songTitle, { color: colors.text }]}>{song.title}</Text>
-      {song.artist && (
-        <Text style={[styles.songArtist, { color: colors.textSecondary }]}>
-          {song.artist}
-        </Text>
-      )}
-    </View>
-  </TouchableOpacity>
-));
-
-SongListItem.displayName = 'SongListItem';
+interface GroupedSongs {
+  [letter: string]: Music[];
+}
 
 export default function AllSongsScreen() {
   const { isDarkMode, songs } = useApp();
   const colors = isDarkMode ? Colors.dark : Colors.light;
 
-  const navigateToSong = useCallback((songId: string) => {
-    router.push(`/song/${songId}`);
-  }, []);
-
-  const sortedSongs = useMemo(() => {
-    return [...songs].sort((a, b) => a.title.localeCompare(b.title));
+  const groupedSongs = useMemo(() => {
+    return songs.reduce((acc, song) => {
+      const firstLetter = song.title[0]?.toUpperCase() || '#';
+      if (!acc[firstLetter]) {
+        acc[firstLetter] = [];
+      }
+      acc[firstLetter].push(song);
+      return acc;
+    }, {} as GroupedSongs);
   }, [songs]);
 
-  const groupedSongs = useMemo(() => {
-    const groups: Record<string, typeof songs> = {};
-    sortedSongs.forEach((song) => {
-      const firstLetter = song.title[0].toUpperCase();
-      if (!groups[firstLetter]) {
-        groups[firstLetter] = [];
-      }
-      groups[firstLetter].push(song);
-    });
-    return groups;
-  }, [sortedSongs]);
+  const navigateToSong = useCallback((id: string) => {
+    router.push(`/song/${id}`);
+  }, []);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-      <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {Object.keys(groupedSongs)
-          .sort()
-          .map((letter) => (
-            <View key={letter} style={styles.section}>
-              <View style={[styles.letterHeader, { backgroundColor: colors.primary }]}>
-                <Text style={[styles.letterText, { color: colors.secondary }]}>{letter}</Text>
-              </View>
-              {groupedSongs[letter].map((song) => (
-                <SongListItem
-                  key={song.id}
-                  song={song}
-                  colors={colors}
-                  onPress={() => navigateToSong(song.id)}
-                />
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.header}>
+          <Text style={[styles.title, { color: colors.text }]}>Todas as Músicas</Text>
+        </View>
+
+        {songs.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+              Nenhuma música encontrada.
+            </Text>
+            <Text style={[styles.emptySubText, { color: colors.textSecondary }]}>
+              Importe ou crie novas músicas para começar.
+            </Text>
+          </View>
+        ) : (
+          <ScrollView>
+            {Object.keys(groupedSongs)
+              .sort()
+              .map((letter) => (
+                <View key={letter} style={styles.section}>
+                  <View style={[styles.letterHeader, { backgroundColor: colors.primary }]}>
+                    <Text style={[styles.letterText, { color: colors.secondary }]}>{letter}</Text>
+                  </View>
+                  {groupedSongs[letter].map((song) => (
+                    <SongListItem
+                      key={song.id}
+                      song={song}
+                      colors={colors}
+                      onPress={() => navigateToSong(song.id.toString())}
+                    />
+                  ))}
+                </View>
               ))}
-            </View>
-          ))}
-      </ScrollView>
-      
-      <FloatingNavMenu />
+          </ScrollView>
+        )}
+      </SafeAreaView>
     </View>
   );
 }
+
+// A definição local do componente foi removida daqui
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  content: {
+  safeArea: {
     flex: 1,
   },
-  scrollContent: {
-    paddingBottom: 110,
-  },
-  section: {
-    marginBottom: 24,
-  },
-  letterHeader: {
-    paddingVertical: 12,
+  header: {
     paddingHorizontal: 20,
+    paddingTop: 24,
+    paddingBottom: 16,
   },
-  letterText: {
-    fontSize: 18,
+  title: {
+    fontSize: 28,
     fontWeight: '700',
-    letterSpacing: 1,
   },
-  songCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(0,0,0,0.05)',
-  },
-  iconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  emptyContainer: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
+    padding: 20,
   },
-  songInfo: {
-    flex: 1,
-  },
-  songTitle: {
-    fontSize: 16,
+  emptyText: {
+    fontSize: 18,
     fontWeight: '600',
-    marginBottom: 2,
+    textAlign: 'center',
   },
-  songArtist: {
+  emptySubText: {
     fontSize: 14,
-    fontWeight: '500',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  section: {
+    marginBottom: 16,
+  },
+  letterHeader: {
+    paddingHorizontal: 20,
+    paddingVertical: 4,
+    opacity: 0.9,
+  },
+  letterText: {
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });

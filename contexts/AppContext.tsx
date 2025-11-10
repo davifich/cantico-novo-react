@@ -1,306 +1,275 @@
-import createContextHook from '@nkzw/create-context-hook';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Appearance } from 'react-native';
+
+import React, { 
+  createContext, 
+  useContext, 
+  useState, 
+  useEffect, 
+  useCallback, 
+  useMemo, 
+  ReactNode, 
+  Dispatch,
+  SetStateAction
+} from 'react';
+import { useColorScheme, Appearance } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 
 import * as DB from '@/lib/database';
-import { Category, Music, QuickAccessItem } from '@/types/music';
+import { Music, Category, AddSongDTO } from '@/types/music';
 
-const PREFERENCE_KEYS = {
-  THEME: 'theme',
-  QUICK_ACCESS: 'quickAccess',
-} as const;
+// --- Definição de Tipos ---
 
-const defaultCategories: Pick<Category, 'name' | 'color'>[] = [
-  { name: 'Tradicional', color: '#8B4513' },
-  { name: 'Adoração', color: '#4169E1' },
-  { name: 'Louvor', color: '#FFD700' },
-  { name: 'Contemporânea', color: '#32CD32' },
-  { name: 'Hinos', color: '#800080' },
-];
+interface QuickAccessItem {
+  songId: number;
+  addedAt: number;
+}
 
-export const [AppProvider, useApp] = createContextHook(() => {
+interface AppContextType {
+  isLoading: boolean;
+  isDarkMode: boolean;
+  isOnline: boolean; 
+  toggleTheme: () => Promise<void>;
+  songs: Music[];
+  categories: Category[];
+  searchQuery: string;
+  setSearchQuery: Dispatch<SetStateAction<string>>;
+  filteredSongs: Music[];
+  recentSongs: Music[];
+  quickAccessSongs: Music[];
+  addToQuickAccess: (songId: number) => Promise<void>;
+  removeFromQuickAccess: (songId: number) => Promise<void>;
+  addSong: (song: AddSongDTO) => Promise<number | null>;
+  deleteSong: (id: number) => Promise<void>;
+  refreshSongs: () => Promise<void>;
+  addCategory: (name: string, color: string) => Promise<number | null>;
+  deleteCategory: (id: number) => Promise<void>;
+  refreshCategories: () => Promise<void>;
+  addSongToCategory: (songId: number, categoryId: number) => Promise<void>;
+  removeSongFromCategory: (songId: number, categoryId: number) => Promise<void>;
+}
+
+// --- Contexto e Provider ---
+
+const AppContext = createContext<AppContextType | undefined>(undefined);
+
+export const useApp = () => {
+  const context = useContext(AppContext);
+  if (!context) {
+    throw new Error('useApp deve ser usado dentro de um AppProvider');
+  }
+  return context;
+};
+
+export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const colorScheme = useColorScheme();
+  const [isDarkMode, setIsDarkMode] = useState(colorScheme === 'dark');
   const [isOnline, setIsOnline] = useState(true);
+
   const [songs, setSongs] = useState<Music[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [quickAccess, setQuickAccess] = useState<QuickAccessItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [quickAccess, setQuickAccess] = useState<QuickAccessItem[]>([]);
 
-  useEffect(() => {
-    const unsubscribe = NetInfo.addEventListener(state => {
-      setIsOnline(state.isConnected ?? false);
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  const refreshSongs = useCallback(async () => {
-    try {
-      const dbSongs = await DB.getAllSongs();
-      setSongs(dbSongs);
-    } catch (error) {
-      console.error('[AppContext] Failed to refresh songs:', error);
-    }
-  }, []);
-
-  const refreshCategories = useCallback(async () => {
-    try {
-      const dbCategories = await DB.getAllCategories();
-      if (dbCategories.length === 0) {
-        for (const cat of defaultCategories) {
-          await DB.addCategory(cat);
-        }
-        const newDbCategories = await DB.getAllCategories();
-        setCategories(newDbCategories);
-      } else {
-        setCategories(dbCategories);
-      }
-    } catch (error) {
-      console.error('[AppContext] Failed to refresh categories:', error);
-    }
-  }, []);
-
-  const loadPreferences = useCallback(async () => {
-    try {
-      const [themeValue, quickAccessValue] = await Promise.all([
-        DB.getPreference(PREFERENCE_KEYS.THEME),
-        DB.getPreference(PREFERENCE_KEYS.QUICK_ACCESS),
-      ]);
-
-      setIsDarkMode(themeValue ? JSON.parse(themeValue) : Appearance.getColorScheme() === 'dark');
-
-      if (quickAccessValue) {
-        let parsed = JSON.parse(quickAccessValue);
-
-        const migratedItems = parsed.map((item: any) => ({
-          ...item,
-          musicId: typeof item.musicId === 'string' ? parseInt(item.musicId, 10) : item.musicId,
-        }));
-
-        const now = new Date().getTime();
-        const validItems = migratedItems.filter(
-          (item: QuickAccessItem) => 
-            new Date(item.expiresAt).getTime() > now && !isNaN(item.musicId)
-        );
-        
-        setQuickAccess(validItems);
-
-        if (validItems.length !== parsed.length) {
-          await DB.setPreference(PREFERENCE_KEYS.QUICK_ACCESS, validItems);
-        }
-      }
-    } catch (error) {
-      console.error('[AppContext] Failed to load preferences:', error);
-    }
-  }, []);
+  // --- Efeitos ---
 
   useEffect(() => {
     const loadInitialData = async () => {
       try {
+        setIsLoading(true);
         await DB.initDatabase();
-        await Promise.all([refreshSongs(), refreshCategories(), loadPreferences()]);
+        await Promise.all([
+          refreshSongs(), 
+          refreshCategories(),
+          loadQuickAccess(),
+        ]);
+        const savedTheme = await AsyncStorage.getItem('theme');
+        if (savedTheme) {
+          setIsDarkMode(savedTheme === 'dark');
+        } else {
+          setIsDarkMode(Appearance.getColorScheme() === 'dark');
+        }
       } catch (error) {
-        console.error('[AppContext] Error loading initial data:', error);
+        console.error('[AppContext] Falha na inicialização:', error);
       } finally {
         setIsLoading(false);
       }
     };
     loadInitialData();
-  }, [refreshSongs, refreshCategories, loadPreferences]);
 
-  const toggleTheme = useCallback(async () => {
-    try {
-      const newTheme = !isDarkMode;
-      setIsDarkMode(newTheme);
-      await DB.setPreference(PREFERENCE_KEYS.THEME, newTheme);
-    } catch (error) {
-      console.error('[AppContext] Failed to toggle theme:', error);
-    }
-  }, [isDarkMode]);
+    const unsubscribeNetInfo = NetInfo.addEventListener(state => {
+      setIsOnline(state.isConnected ?? false);
+    });
 
-  const addCategory = useCallback(async (name: string, color: string) => {
-    try {
-      if (!name.trim() || categories.some(c => c.name.toLowerCase() === name.trim().toLowerCase())) return;
-      await DB.addCategory({ name: name.trim(), color });
-      await refreshCategories();
-    } catch (error) {
-      console.error('[AppContext] Failed to add category:', error);
-    }
-  }, [categories, refreshCategories]);
+    return () => {
+      unsubscribeNetInfo();
+    };
+  }, []);
 
-  const updateCategory = useCallback(async (id: number, name: string, color: string) => {
-    try {
-      const categoryToUpdate = categories.find(c => c.id === id);
-      if (!categoryToUpdate) return;
+  // --- Funções de Manipulação de Dados ---
 
-      if (categoryToUpdate.status === 'synced' && !isOnline) {
-        console.warn('Bloqueado: Não é possível editar uma categoria sincronizada em modo offline.');
-        // Aqui você pode adicionar um feedback para o usuário (ex: Toast)
-        return;
-      }
+  const refreshSongs = useCallback(async () => {
+    // CORREÇÃO: Usando o nome correto da função do banco de dados.
+    const allSongs = await DB.getAllSongs();
+    setSongs(allSongs);
+  }, []);
 
-      if (!name.trim()) return;
-      await DB.updateCategory(id, { name: name.trim(), color });
-      await refreshCategories();
-    } catch (error) {
-      console.error('[AppContext] Failed to update category:', error);
-    }
-  }, [categories, isOnline, refreshCategories]);
+  const refreshCategories = useCallback(async () => {
+    // CORREÇÃO: Usando o nome correto da função do banco de dados.
+    const allCategories = await DB.getAllCategories();
+    setCategories(allCategories);
+  }, []);
 
-  const deleteCategory = useCallback(async (id: number) => {
-    try {
-      await DB.deleteCategory(id);
-      await refreshCategories();
-    } catch (error) {
-      console.error('[AppContext] Failed to delete category:', error);
-    }
-  }, [refreshCategories]);
-
-  const addSong = useCallback(async (song: Partial<Omit<Music, 'id'>>) => {
+  const addSong = useCallback(async (song: AddSongDTO): Promise<number | null> => {
     try {
       const newSongId = await DB.addSong(song);
       await refreshSongs();
       return newSongId;
     } catch (error) {
-      console.error('[AppContext] Failed to add song:', error);
+      console.error('[AppContext] Falha ao adicionar música:', error);
       return null;
     }
   }, [refreshSongs]);
 
-  const updateSong = useCallback(async (songId: number, data: Partial<Omit<Music, 'id'>>) => {
+  const deleteSong = useCallback(async (id: number) => {
     try {
-      const songToUpdate = songs.find(s => s.id === songId);
-      if (!songToUpdate) return;
-
-      if (songToUpdate.status === 'synced' && !isOnline) {
-        console.warn('Bloqueado: Não é possível editar uma música sincronizada em modo offline.');
-        // Aqui você pode adicionar um feedback para o usuário (ex: Toast)
-        return;
-      }
-
-      await DB.updateSong(songId, data);
+      await DB.deleteSong(id);
       await refreshSongs();
     } catch (error) {
-      console.error('[AppContext] Failed to update song:', error);
+      console.error('[AppContext] Falha ao deletar música:', error);
     }
-  }, [songs, isOnline, refreshSongs]);
+  }, [refreshSongs]);
 
-  const addSongToCategory = useCallback(async (songId: number, categoryName: string) => {
+  const addCategory = useCallback(async (name: string, color: string): Promise<number | null> => {
     try {
-      const song = songs.find(s => s.id === songId);
-      if (song && !song.categories.includes(categoryName.toLowerCase())) {
-        const updatedCategories = [...song.categories, categoryName.toLowerCase()];
-        await updateSong(songId, { categories: updatedCategories });
+      const newCategoryId = await DB.addCategory({ name, color });
+      await refreshCategories();
+      return newCategoryId;
+    } catch (error) {
+      console.error('[AppContext] Falha ao adicionar categoria:', error);
+      return null;
+    }
+  }, [refreshCategories]);
+
+  const deleteCategory = useCallback(async (id: number) => {
+    try {
+      await DB.deleteCategory(id);
+      await Promise.all([refreshCategories(), refreshSongs()]);
+    } catch (error) {
+      console.error('[AppContext] Falha ao deletar categoria:', error);
+    }
+  }, [refreshCategories, refreshSongs]);
+
+  const addSongToCategory = useCallback(async (songId: number, categoryId: number) => {
+    try {
+      await DB.addSongToCategory(songId, categoryId);
+      await refreshSongs();
+    } catch (error) {
+      console.error(`[AppContext] Falha ao adicionar música ${songId} à categoria ${categoryId}:`, error);
+      throw error;
+    }
+  }, [refreshSongs]);
+
+  const removeSongFromCategory = useCallback(async (songId: number, categoryId: number) => {
+    try {
+      await DB.removeSongFromCategory(songId, categoryId);
+      await refreshSongs();
+    } catch (error) {
+      console.error(`[AppContext] Falha ao remover música ${songId} da categoria ${categoryId}:`, error);
+      throw error;
+    }
+  }, [refreshSongs]);
+
+  const loadQuickAccess = useCallback(async () => {
+    try {
+      const stored = await AsyncStorage.getItem('@quickAccessSongs');
+      if (stored) {
+        const items: QuickAccessItem[] = JSON.parse(stored);
+        const now = Date.now();
+        const twentyFourHours = 24 * 60 * 60 * 1000;
+        const validItems = items.filter(item => (now - item.addedAt) < twentyFourHours);
+        setQuickAccess(validItems);
+        if (validItems.length < items.length) {
+          await AsyncStorage.setItem('@quickAccessSongs', JSON.stringify(validItems));
+        }
       }
     } catch (error) {
-      console.error('[AppContext] Failed to add song to category:', error);
-    }
-  }, [songs, updateSong]);
-
-  const removeSongFromCategory = useCallback(async (songId: number, categoryName: string) => {
-    try {
-      const song = songs.find(s => s.id === songId);
-      if (song) {
-        const updatedCategories = song.categories.filter(cat => cat !== categoryName.toLowerCase());
-        await updateSong(songId, { categories: updatedCategories });
-      }
-    } catch (error) {
-      console.error('[AppContext] Failed to remove song from category:', error);
-    }
-  }, [songs, updateSong]);
-
-  const addToQuickAccess = useCallback(async (musicId: number) => {
-    try {
-      if (quickAccess.length >= 10 || quickAccess.some(item => item.musicId === musicId)) return;
-      const expiresAt = new Date(new Date().getTime() + 24 * 60 * 60 * 1000);
-      const newItem: QuickAccessItem = {
-        musicId,
-        addedAt: new Date().toISOString(),
-        expiresAt: expiresAt.toISOString(),
-      };
-      const updated = [...quickAccess, newItem];
-      setQuickAccess(updated);
-      await DB.setPreference(PREFERENCE_KEYS.QUICK_ACCESS, updated);
-    } catch (error) {
-      console.error('[AppContext] Failed to add to quick access:', error);
-    }
-  }, [quickAccess]);
-
-  const removeFromQuickAccess = useCallback(async (musicId: number) => {
-    try {
-      const updated = quickAccess.filter(item => item.musicId !== musicId);
-      setQuickAccess(updated);
-      await DB.setPreference(PREFERENCE_KEYS.QUICK_ACCESS, updated);
-    } catch (error) {
-      console.error('[AppContext] Failed to remove from quick access:', error);
-    }
-  }, [quickAccess]);
-
-  const reorderQuickAccess = useCallback(async (items: QuickAccessItem[]) => {
-    try {
-      if (!Array.isArray(items)) return;
-      setQuickAccess(items);
-      await DB.setPreference(PREFERENCE_KEYS.QUICK_ACCESS, items);
-    } catch (error) {
-      console.error('[AppContext] Failed to reorder quick access:', error);
+      console.error('[AppContext] Falha ao carregar Acesso Rápido:', error);
     }
   }, []);
 
-  const filteredSongs = useMemo(() => {
-    if (!searchQuery.trim()) return songs;
-    const query = searchQuery.toLowerCase().trim();
-    return songs.filter(song => 
-      song.title.toLowerCase().includes(query) ||
-      (song.artist && song.artist.toLowerCase().includes(query)) ||
-      (song.letra && song.letra.toLowerCase().includes(query))
-    );
-  }, [songs, searchQuery]);
+  const addToQuickAccess = useCallback(async (songId: number) => {
+    const isAlreadyAdded = quickAccess.some(item => item.songId === songId);
+    if (isAlreadyAdded || quickAccess.length >= 10) return;
 
-  const recentSongs = useMemo(() => {
-    return [...songs]
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      .slice(0, 5);
-  }, [songs]);
+    const newItem: QuickAccessItem = { songId, addedAt: Date.now() };
+    const updatedList = [...quickAccess, newItem];
+    
+    setQuickAccess(updatedList);
+    await AsyncStorage.setItem('@quickAccessSongs', JSON.stringify(updatedList));
+  }, [quickAccess]);
 
-  const quickAccessSongs = useMemo(() => {
-    return quickAccess
-      .map(item => songs.find(song => song.id === item.musicId))
-      .filter((song): song is Music => song !== undefined);
-  }, [quickAccess, songs]);
+  const removeFromQuickAccess = useCallback(async (songId: number) => {
+    const updatedList = quickAccess.filter(item => item.songId !== songId);
+    setQuickAccess(updatedList);
+    await AsyncStorage.setItem('@quickAccessSongs', JSON.stringify(updatedList));
+  }, [quickAccess]);
+  
+  const toggleTheme = useCallback(async () => {
+    const newTheme = !isDarkMode ? 'dark' : 'light';
+    setIsDarkMode(!isDarkMode);
+    await AsyncStorage.setItem('theme', newTheme);
+  }, [isDarkMode]);
 
-  return useMemo(
+  const filteredSongs = useMemo(() =>
+    songs.filter(song => 
+      song.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      song.artist?.toLowerCase().includes(searchQuery.toLowerCase())
+    ), [songs, searchQuery]);
+
+  const recentSongs = useMemo(() => 
+    [...songs].sort((a, b) => b.id - a.id).slice(0, 5), 
+    [songs]
+  );
+
+  const quickAccessSongs = useMemo(() => 
+    quickAccess
+      .map(item => songs.find(s => s.id === item.songId))
+      .filter((s): s is Music => s !== undefined), 
+    [quickAccess, songs]
+  );
+
+  const value = useMemo(
     () => ({
+      isLoading,
       isDarkMode,
-      toggleTheme,
       isOnline,
+      toggleTheme,
       songs,
       categories,
-      quickAccess,
       searchQuery,
       setSearchQuery,
-      isLoading,
-      addCategory,
-      updateCategory,
-      deleteCategory,
-      addSong,
-      updateSong,
-      addSongToCategory,
-      removeSongFromCategory,
-      addToQuickAccess,
-      removeFromQuickAccess,
-      reorderQuickAccess,
       filteredSongs,
       recentSongs,
       quickAccessSongs,
+      addToQuickAccess,
+      removeFromQuickAccess,
+      addSong,
+      deleteSong,
       refreshSongs,
+      addCategory,
+      deleteCategory,
       refreshCategories,
+      addSongToCategory,
+      removeSongFromCategory,
     }),
     [
-      isDarkMode, toggleTheme, isOnline, songs, categories, quickAccess, searchQuery, isLoading, addCategory, updateCategory,
-      deleteCategory, addSong, updateSong, addSongToCategory, removeSongFromCategory, addToQuickAccess, removeFromQuickAccess,
-      reorderQuickAccess, filteredSongs, recentSongs, quickAccessSongs, refreshSongs, refreshCategories,
+      isLoading, isDarkMode, isOnline, toggleTheme, songs, categories, searchQuery, 
+      filteredSongs, recentSongs, quickAccessSongs, addToQuickAccess, removeFromQuickAccess,
+      addSong, deleteSong, refreshSongs, addCategory, deleteCategory, refreshCategories,
+      addSongToCategory, removeSongFromCategory
     ]
   );
-});
+
+  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
+};

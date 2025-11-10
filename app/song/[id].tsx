@@ -1,7 +1,7 @@
 
 import { Stack, useLocalSearchParams } from 'expo-router';
-import { ZoomIn, ZoomOut, Plus, Check, MoreVertical } from 'lucide-react-native';
-import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react';
+import { ZoomIn, ZoomOut } from 'lucide-react-native';
+import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,294 +13,163 @@ import {
   Dimensions,
 } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import BottomSheet from '@gorhom/bottom-sheet';
 import Pdf from 'react-native-pdf';
 
 import Colors from '@/constants/colors';
 import { useApp } from '@/contexts/AppContext';
 import { Music } from '@/types/music';
 import { getPreference, setPreference } from '@/lib/database';
-import ViewSelectorMenu from '@/components/ViewSelectorMenu';
+import CifraViewer from '@/components/CifraViewer';
 
 const ZOOM_LEVELS = [1, 1.15, 1.3] as const;
+
+type ViewMode = 'letra' | 'cifra' | 'partitura';
 
 export default function SongScreen() {
   const { id: idString } = useLocalSearchParams<{ id: string }>();
   const id = useMemo(() => (idString ? parseInt(idString, 10) : NaN), [idString]);
 
-  const { isDarkMode, songs, quickAccessSongs, addToQuickAccess, removeFromQuickAccess, isOnline } = useApp();
+  const { isDarkMode, songs } = useApp();
   const colors = useMemo(() => (isDarkMode ? Colors.dark : Colors.light), [isDarkMode]);
 
   const [song, setSong] = useState<Music | undefined>(undefined);
-  const [viewMode, setViewMode] = useState<'letra' | 'cifra' | 'partitura'>('letra');
+  const [viewMode, setViewMode] = useState<ViewMode>('letra');
   const [zoomLevel, setZoomLevel] = useState(0);
-  const sheetRef = useRef<BottomSheet>(null);
 
   useEffect(() => {
     const currentSong = songs.find((s) => s.id === id);
     setSong(currentSong);
 
     if (currentSong) {
-      // Carrega a última preferência de visualização para esta música
       getPreference(`song_${currentSong.id}_viewMode`).then(mode => {
+        if (mode === 'cifra' && !currentSong.has_cifra) {
+          return setViewMode('letra');
+        }
+        if (mode === 'partitura' && !currentSong.has_partitura) {
+          return setViewMode('letra');
+        }
         if (mode) {
-          setViewMode(mode as any);
+          setViewMode(mode as ViewMode);
+        } else {
+          setViewMode(currentSong.letra ? 'letra' : currentSong.has_cifra ? 'cifra' : 'partitura');
         }
       });
     }
   }, [songs, id]);
 
-  const isEditDisabled = useMemo(() => {
-    if (!song) return true;
-    return song.status === 'synced' && !isOnline;
-  }, [song, isOnline]);
-
-  const isInQuickAccess = useMemo(() => {
-    if (!song) return false;
-    return quickAccessSongs.some((s) => s.id === song.id);
-  }, [quickAccessSongs, song]);
-
-  const canAddToQuickAccess = useMemo(() => {
-    return quickAccessSongs.length < 10;
-  }, [quickAccessSongs]);
-
-  const handleOpenMenu = useCallback(() => {
-    sheetRef.current?.expand();
-  }, []);
-
-  const handleSelectMode = useCallback((mode: 'letra' | 'cifra' | 'partitura') => {
+  const handleSelectMode = useCallback((mode: ViewMode) => {
     setViewMode(mode);
-    setPreference(`song_${id}_viewMode`, mode);
-    sheetRef.current?.close();
-  }, [id]);
+    if (song) {
+      setPreference(`song_${song.id}_viewMode`, mode);
+    }
+  }, [song]);
 
   const handleZoomIn = useCallback(() => {
-    if (zoomLevel < ZOOM_LEVELS.length - 1) {
-      setZoomLevel(zoomLevel + 1);
-    }
+    if (zoomLevel < ZOOM_LEVELS.length - 1) setZoomLevel(zoomLevel + 1);
   }, [zoomLevel]);
 
   const handleZoomOut = useCallback(() => {
-    if (zoomLevel > 0) {
-      setZoomLevel(zoomLevel - 1);
-    }
+    if (zoomLevel > 0) setZoomLevel(zoomLevel - 1);
   }, [zoomLevel]);
-
-  const handleToggleQuickAccess = useCallback(() => {
-    if (!song) return;
-    if (isInQuickAccess) {
-      removeFromQuickAccess(song.id);
-    } else if (canAddToQuickAccess) {
-      addToQuickAccess(song.id);
-    }
-  }, [isInQuickAccess, canAddToQuickAccess, song, removeFromQuickAccess, addToQuickAccess]);
 
   const renderContent = () => {
     if (!song) return null;
 
-    if (viewMode === 'partitura' && song.file_path) {
-      return (
-        <Pdf
-          source={{ uri: song.file_path }}
-          style={[styles.pdf, { backgroundColor: colors.background }]}
-          trustAllCerts={false} // Important for local files on Android
-        />
-      );
+    if (viewMode === 'partitura' && song.has_partitura && song.file_path) {
+      return <Pdf source={{ uri: song.file_path }} style={styles.pdf} trustAllCerts={false} />;
     }
-
-    const content = viewMode === 'letra' ? song.letra : song.cifra;
-
-    if (content) {
+    if (viewMode === 'cifra' && song.has_cifra && song.cifra) {
+      return <ScrollView><CifraViewer content={song.cifra} zoomFactor={ZOOM_LEVELS[zoomLevel]} /></ScrollView>;
+    }
+    if (song.letra) {
       return (
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          {song.artist && (
-            <Text style={[styles.artist, { color: colors.textSecondary }]}>{song.artist}</Text>
-          )}
+          {song.artist && <Text style={[styles.artist, { color: colors.textSecondary }]}>{song.artist}</Text>}
           <Text style={[styles.lyrics, { color: colors.text, fontSize: 16 * ZOOM_LEVELS[zoomLevel] }]}>
-            {content}
+            {song.letra}
           </Text>
         </ScrollView>
       );
     }
-
     return (
       <View style={[styles.emptyCard, { backgroundColor: colors.card }]}>
-        <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-          {`Nenhuma ${viewMode} disponível para esta música.`}
-        </Text>
+        <Text style={[styles.emptyText, { color: colors.textSecondary }]}>Nenhum conteúdo disponível.</Text>
       </View>
     );
   };
 
   if (!song) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <Stack.Screen options={{ title: 'Música não encontrada' }} />
-        <View style={styles.emptyContainer}>
-          <ActivityIndicator color={colors.primary} />
-          <Text style={[styles.emptyText, { color: colors.textSecondary, marginTop: 10 }]}>
-            Carregando música...
-          </Text>
-        </View>
+      <View style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator color={colors.primary} />
+        <Text style={{ color: colors.text, marginTop: 10 }}>Carregando música...</Text>
       </View>
     );
   }
 
+  const availableModes = ['letra', song.has_cifra && 'cifra', song.has_partitura && 'partitura'].filter(Boolean) as ViewMode[];
+
   return (
     <GestureHandlerRootView style={[styles.container, { backgroundColor: colors.background }]}>
-      <Stack.Screen
-        options={{
-          title: song.title,
-          headerRight: () => (
-            <View style={styles.headerButtons}>
-               <TouchableOpacity
-                style={[styles.headerButton, { backgroundColor: colors.card }]}
-                onPress={handleOpenMenu}
-              >
-                <MoreVertical size={20} color={colors.text} />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.headerButton, { backgroundColor: colors.card }]}
-                onPress={handleToggleQuickAccess}
-                disabled={!isInQuickAccess && !canAddToQuickAccess}
-              >
-                {isInQuickAccess ? (
-                  <Check size={20} color={colors.success} />
-                ) : (
-                  <Plus size={20} color={canAddToQuickAccess ? colors.text : colors.textLight} />
-                )}
-              </TouchableOpacity>
-            </View>
-          ),
-        }}
-      />
+      <Stack.Screen options={{ title: song.title }} />
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
 
-      {viewMode !== 'partitura' && (
-        <View style={[styles.topBar, { backgroundColor: colors.surface }]}>
+      <View style={[styles.topBar, { borderBottomColor: colors.border }]}>
+        {availableModes.length > 1 && (
+          <View style={[styles.modeSelector, { backgroundColor: colors.surface }]}>
+            {availableModes.map(mode => (
+              <TouchableOpacity
+                key={mode}
+                style={[styles.modeButton, viewMode === mode && { backgroundColor: colors.primary }]}
+                onPress={() => handleSelectMode(mode)}
+              >
+                <Text style={[styles.modeButtonText, { color: viewMode === mode ? 'white' : colors.text }]}>
+                  {mode.charAt(0).toUpperCase() + mode.slice(1)}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+        {viewMode !== 'partitura' && (
           <View style={styles.zoomControls}>
-            <TouchableOpacity
-              style={[styles.zoomButton, { backgroundColor: colors.card }, zoomLevel === 0 && styles.zoomButtonDisabled]}
-              onPress={handleZoomOut}
-              disabled={zoomLevel === 0}
-            >
+            <TouchableOpacity style={styles.zoomButton} onPress={handleZoomOut} disabled={zoomLevel === 0}>
               <ZoomOut size={20} color={zoomLevel === 0 ? colors.textLight : colors.text} />
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.zoomButton, { backgroundColor: colors.card }, zoomLevel === ZOOM_LEVELS.length - 1 && styles.zoomButtonDisabled]}
-              onPress={handleZoomIn}
-              disabled={zoomLevel === ZOOM_LEVELS.length - 1}
-            >
+            <TouchableOpacity style={styles.zoomButton} onPress={handleZoomIn} disabled={zoomLevel === ZOOM_LEVELS.length - 1}>
               <ZoomIn size={20} color={zoomLevel === ZOOM_LEVELS.length - 1 ? colors.textLight : colors.text} />
             </TouchableOpacity>
           </View>
-        </View>
-      )}
-
-      {isEditDisabled && (
-        <View style={[styles.warningBanner, { backgroundColor: colors.warningContainer }]}>
-          <Text style={[styles.warningText, { color: colors.warningText }]}>
-            Modo offline: Edições estão desativadas.
-          </Text>
-        </View>
-      )}
-
-      <View style={styles.contentContainer}>
-        {renderContent()}
+        )}
       </View>
-      
-      <ViewSelectorMenu 
-        sheetRef={sheetRef} 
-        hasPartitura={!!song.file_path}
-        onSelectMode={handleSelectMode} 
-      />
+
+      <View style={styles.contentContainer}>{renderContent()}</View>
     </GestureHandlerRootView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  headerButtons: {
-    flexDirection: 'row',
-    gap: 8,
-    marginRight: 8,
-  },
-  headerButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  container: { flex: 1 },
+  headerButton: { marginRight: 16, padding: 4 },
   topBar: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(0,0,0,0.1)',
-  },
-  zoomControls: {
+    borderBottomWidth: 1,
     flexDirection: 'row',
-    gap: 8,
-  },
-  zoomButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 16,
   },
-  zoomButtonDisabled: {
-    opacity: 0.5,
-  },
-  contentContainer: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 20,
-  },
-  pdf: {
-    flex: 1,
-    width: Dimensions.get('window').width,
-    height: Dimensions.get('window').height,
-  },
-  artist: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 20,
-  },
-  lyrics: {
-    lineHeight: 28,
-    fontWeight: '500',
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 40,
-  },
-  emptyCard: {
-    padding: 32,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 40,
-    marginHorizontal: 20,
-  },
-  emptyText: {
-    fontSize: 15,
-    fontWeight: '500',
-    textAlign: 'center',
-  },
-  warningBanner: {
-    padding: 12,
-    alignItems: 'center',
-  },
-  warningText: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
+  modeSelector: { flexDirection: 'row', borderRadius: 8, overflow: 'hidden', flexShrink: 1 },
+  modeButton: { paddingHorizontal: 16, paddingVertical: 8 },
+  modeButtonText: { fontWeight: 'bold', fontSize: 14 },
+  zoomControls: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  zoomButton: { padding: 4 },
+  contentContainer: { flex: 1 },
+  scrollContent: { padding: 20 },
+  pdf: { flex: 1, width: Dimensions.get('window').width, height: Dimensions.get('window').height },
+  artist: { fontSize: 16, fontWeight: '600', marginBottom: 20 },
+  lyrics: { lineHeight: 28, fontWeight: '500' },
+  emptyCard: { padding: 32, borderRadius: 12, alignItems: 'center', marginTop: 40, marginHorizontal: 20 },
+  emptyText: { fontSize: 15, fontWeight: '500', textAlign: 'center' },
 });

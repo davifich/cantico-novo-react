@@ -1,3 +1,4 @@
+
 import { router, Stack } from 'expo-router';
 import React, { useState, useCallback } from 'react';
 import {
@@ -14,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import Colors from '@/constants/colors';
 import { useApp } from '@/contexts/AppContext';
+import { AddSongDTO } from '@/types/music'; // Importa o tipo para garantir a conformidade
 
 export default function CreateSongScreen() {
   const { isDarkMode, addSong, refreshSongs } = useApp();
@@ -34,20 +36,22 @@ export default function CreateSongScreen() {
     setIsSaving(true);
 
     try {
-      const newSong = {
+      // CORREÇÃO: O objeto agora corresponde à interface AddSongDTO
+      const newSong: AddSongDTO = {
         title: title.trim(),
         artist: artist.trim(),
-        letra: letra.trim(),
-        cifra: cifra.trim(),
-        categories: [],
-        createdAt: new Date().toISOString(),
+        letra: letra.trim() || null,
+        cifra: cifra.trim() || null,
+        has_cifra: cifra.trim().length > 0, // Determina se há cifra com base no input
+        has_partitura: false, // Criação manual não tem partitura
+        file_path: null,
+        category_ids: [], // Começa sem categorias
       };
 
-      // A função addSong agora é do DB e retorna o ID inserido
       const newSongId = await addSong(newSong);
 
       if (typeof newSongId === 'number') {
-        await refreshSongs(); // Garante que a lista de músicas seja atualizada
+        await refreshSongs(); 
         Alert.alert('Sucesso!', 'A música foi salva.', [
           {
             text: 'OK',

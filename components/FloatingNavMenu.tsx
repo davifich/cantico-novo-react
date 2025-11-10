@@ -1,7 +1,15 @@
+
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, usePathname } from 'expo-router';
-import { Home, Upload, Clock, Music2, Settings } from 'lucide-react-native';
-import React, { memo, useCallback } from 'react';
+import {
+  Home,
+  Upload,
+  Clock,
+  Music2,
+  Settings,
+  LucideProps,
+} from 'lucide-react-native';
+import React, { memo, useCallback, useMemo } from 'react';
 import { View, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -9,14 +17,16 @@ import Colors from '@/constants/colors';
 import { useApp } from '@/contexts/AppContext';
 
 interface NavButtonProps {
-  icon: React.ComponentType<any>;
+  icon: React.ComponentType<LucideProps>;
   isActive: boolean;
   onPress: () => void;
   colors: typeof Colors.light;
 }
 
 const NavButton = memo(({ icon: Icon, isActive, onPress, colors }: NavButtonProps) => {
-  const inactiveColor = 'rgba(255, 255, 255, 0.6)';
+  // CORREÇÃO: 'isDarkMode' foi movido para antes de seu uso.
+  const { isDarkMode } = useApp();
+  const inactiveColor = useMemo(() => (isDarkMode ? 'rgba(255, 255, 255, 0.7)' : 'rgba(26, 31, 58, 0.7)'), [isDarkMode]);
 
   return (
     <TouchableOpacity
@@ -48,20 +58,19 @@ const FloatingNavMenu = memo(() => {
   const navigateToSettings = useCallback(() => router.push('/settings'), []);
 
   const isActive = useCallback(
-    (path: string) => {
-      if (path === '/') {
-        return pathname === '/';
+    (route: string) => {
+      if (route === '/') {
+        return pathname === route || pathname.startsWith('/song') || pathname.startsWith('/category') || pathname.startsWith('/all-songs');
       }
-      return pathname.startsWith(path);
+      return pathname.startsWith(route);
     },
     [pathname]
   );
 
-  const bottomOffset = Platform.select({
-    ios: Math.max(insets.bottom, 16),
-    android: 16,
-    default: 16,
-  });
+  const bottomOffset = useMemo(() => {
+    const base = insets.bottom > 0 ? insets.bottom - 10 : 20;
+    return Platform.OS === 'ios' ? base : 24;
+  }, [insets.bottom]);
 
   return (
     <View style={[styles.container, { bottom: bottomOffset }]}>
@@ -141,7 +150,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
-    transition: 'all 0.3s ease',
   },
   navButtonActive: {
     shadowColor: '#d4af37',

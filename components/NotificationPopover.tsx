@@ -75,7 +75,7 @@ const NotificationPopover = ({
       </ScrollView>
       {notifications.length > 0 && (
         <TouchableOpacity style={[styles.clearAllButton, { borderTopColor: colors.border }]} onPress={onClearAll}>
-          <Text style={[styles.clearAllButtonText, { color: colors.accent }]}>
+          <Text style={[styles.clearAllButtonText, { color: colors.primary }]}>
             Limpar todas as notificações
           </Text>
         </TouchableOpacity>
