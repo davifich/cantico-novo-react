@@ -105,23 +105,20 @@ export default function RootLayout() {
   useEffect(() => {
     const prepare = async () => {
       try {
-        console.log('[RootLayout] Iniciando preparação do app...');
+        // Esconde a splash screen assim que possível
+        await SplashScreen.hideAsync();
         
-        // ⚠️ CRÍTICO: Inicializa o banco de dados UMA ÚNICA VEZ aqui
+        // Inicializa o banco de dados em segundo plano
         await initDatabase();
-        console.log('[RootLayout] ✅ Banco de dados inicializado');
 
-        // Pequeno delay para estabilidade
+        // Adiciona um pequeno delay para garantir que a transição seja suave
         await new Promise(resolve => setTimeout(resolve, 100));
 
-        setIsReady(true);
-        console.log('[RootLayout] ✅ App pronto');
       } catch (error) {
-        console.error('[RootLayout] ❌ Erro na inicialização:', error);
         setInitError(error instanceof Error ? error.message : 'Erro desconhecido');
-        setIsReady(true);
       } finally {
-        await SplashScreen.hideAsync();
+        // Sinaliza que a preparação (boa ou má) terminou
+        setIsReady(true);
       }
     };
 
@@ -129,6 +126,7 @@ export default function RootLayout() {
   }, []);
 
   if (!isReady) {
+    // Retorna null (ou um componente de loading) enquanto o app prepara
     return null;
   }
 
