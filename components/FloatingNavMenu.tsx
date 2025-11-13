@@ -13,8 +13,8 @@ import React, { memo, useCallback, useMemo } from 'react';
 import { View, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import Colors from '@/constants/colors';
-import { useApp } from '@/contexts/AppContext';
+import Colors from '../constants/colors';
+import { useApp } from '../contexts/AppContext';
 
 interface NavButtonProps {
   icon: React.ComponentType<LucideProps>;

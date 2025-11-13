@@ -7,6 +7,9 @@
   packages = [ pkgs.nodejs_20
   pkgs.ios-webkit-debug-proxy
   pkgs.supabase-cli
+  pkgs.doas
+  pkgs.jdk
+
    ];
   # Sets environment variables in the workspace
   env = { EXPO_USE_FAST_RESOLVER = "1"; };

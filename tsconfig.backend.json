@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "CommonJS",
+    "target": "ES2020"
+  },
+  "include": [
+    "scripts",
+    "data",
+    "types",
+    "lib/database.ts"
+  ],
+  "exclude": [
+    "app",
+    "components",
+    "assets",
+    "node_modules"
+  ]
+}

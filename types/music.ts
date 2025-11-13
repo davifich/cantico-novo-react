@@ -1,6 +1,29 @@
 
 // @/types/music.ts
 
+import { z } from "zod";
+
+/**
+ * Schema Zod para validar a criação de uma música.
+ */
+export const AddSongDTOSchema = z.object({
+  title: z.string().min(1, "O título é obrigatório."),
+  artist: z.string().optional(),
+  code: z.string().optional(),
+  letra: z.string().nullable(),
+  cifra: z.string().nullable(),
+  file_path: z.string().nullable().optional(),
+  category_ids: z.array(z.number()).optional(),
+  has_cifra: z.boolean(),
+  has_partitura: z.boolean(),
+});
+
+/**
+ * Tipo TypeScript gerado automaticamente a partir do schema.
+ */
+export type AddSongDTOSchema = z.infer<typeof AddSongDTOSchema>;
+
+
 /**
  * Representa uma categoria para organizar as músicas.
  */
@@ -18,6 +41,7 @@ export interface Music {
   title: string;
   artist?: string;
   status?: 'synced' | 'pending' | 'error';
+  code?: string; // Novo campo para o código alfanumérico
 
   // O conteúdo principal da música
   letra: string | null;
@@ -39,6 +63,7 @@ export interface Music {
 export interface AddSongDTO {
   title: string;
   artist?: string;
+  code?: string; // Novo campo para o código alfanumérico
   letra: string | null;
   cifra: string | null;
   file_path?: string | null;

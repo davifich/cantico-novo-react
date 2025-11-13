@@ -7,13 +7,19 @@
         "./*"
       ]
     },
+    "module":"esnext",
     "moduleResolution": "bundler",
     "jsx": "react-native"
   },
   "include": [
-    "**/*.ts",
-    "**/*.tsx",
+    "app/**/*.ts",
+    "app/**/*.tsx",
     ".expo/types/**/*.ts",
     "expo-env.d.ts"
+  ],
+  "exclude": [
+    "backend",
+    "node_modules"
   ]
+  
 }

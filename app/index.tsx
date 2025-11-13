@@ -1,7 +1,7 @@
 
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { Search, ListMusic, FolderTree, Bell } from 'lucide-react-native'; // Ícone FolderTree restaurado
+import { Search, ListMusic, FolderTree, Bell } from 'lucide-react-native';
 import React, { useState, useCallback, memo, useEffect } from 'react';
 import {
   View,
@@ -14,6 +14,8 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 
 import FloatingNavMenu from '@/components/FloatingNavMenu';
 import NotificationPopover, { Notification } from '@/components/NotificationPopover';
@@ -56,27 +58,37 @@ const sampleNotifications: Notification[] = [
   { id: 3, message: 'Não se esqueça do ensaio do coral amanhã!', timestamp: '1 dia atrás', read: false },
 ];
 
+const NOTIFICATIONS_STORAGE_KEY = '@cantico_novo_notifications';
+
+
 // --- Tela Principal ---
 export default function HomeScreen() {
   const { isDarkMode, filteredSongs, recentSongs, searchQuery, setSearchQuery, isLoading } = useApp();
   const [localSearch, setLocalSearch] = useState(searchQuery);
-  const [notifications, setNotifications] = useState<Notification[]>(sampleNotifications);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isPopoverVisible, setPopoverVisible] = useState(false);
 
   const colors = isDarkMode ? Colors.dark : Colors.light;
 
-  // Efeito para notificações (simulado)
+  // Efeito para carregar e inicializar as notificações
   useEffect(() => {
-    const interval = setInterval(() => {
-      const newNotification: Notification = {
-        id: Date.now(),
-        message: `Nova atualização no Cântico Novo! Confira as novidades.`,
-        timestamp: 'Agora mesmo',
-        read: false,
-      };
-      setNotifications(prev => [newNotification, ...prev].slice(0, 10));
-    }, 60000); // Aumentado o intervalo para 1 minuto
-    return () => clearInterval(interval);
+    const loadNotifications = async () => {
+      try {
+        const storedNotifications = await AsyncStorage.getItem(NOTIFICATIONS_STORAGE_KEY);
+        if (storedNotifications) {
+          setNotifications(JSON.parse(storedNotifications));
+        } else {
+          // Se não houver nada, inicializa com as de exemplo e salva
+          setNotifications(sampleNotifications);
+          await AsyncStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(sampleNotifications));
+        }
+      } catch (error) {
+        console.error("Failed to load notifications from storage", error);
+        setNotifications(sampleNotifications); // Fallback para os dados de exemplo em caso de erro
+      }
+    };
+
+    loadNotifications();
   }, []);
 
   // --- Funções de Navegação e Manipulação ---
@@ -87,17 +99,29 @@ export default function HomeScreen() {
 
   const navigateToSong = useCallback((songId: number) => router.push(`/song/${songId}`), []);
   const navigateToAllSongs = useCallback(() => router.push('/all-songs'), []);
-  const navigateToCategories = useCallback(() => router.push('/categories'), []); // Função de navegação restaurada
+  const navigateToCategories = useCallback(() => router.push('/categories'), []);
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  const handleClearNotification = (id: number) => {
-    setNotifications(notifications.map(n => n.id === id ? { ...n, read: true } : n));
+  const handleClearNotification = async (id: number) => {
+    const newNotifications = notifications.map(n => n.id === id ? { ...n, read: true } : n);
+    setNotifications(newNotifications);
+    try {
+      await AsyncStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(newNotifications));
+    } catch (error) {
+      console.error("Failed to save notifications to storage", error);
+    }
   };
 
-  const handleClearAllNotifications = () => {
-    setNotifications([]);
+  const handleClearAllNotifications = async () => {
+    const readNotifications = notifications.map(n => ({...n, read: true}));
+    setNotifications(readNotifications);
     setPopoverVisible(false);
+     try {
+      await AsyncStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(readNotifications));
+    } catch (error) {
+      console.error("Failed to save notifications to storage", error);
+    }
   };
 
   const togglePopover = () => setPopoverVisible(!isPopoverVisible);

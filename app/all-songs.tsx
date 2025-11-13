@@ -11,26 +11,40 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import SongListItem from '@/components/SongListItem'; // Importa o componente reutilizável
+import SongListItem from '@/components/SongListItem';
 import Colors from '@/constants/colors';
 import { useApp } from '@/contexts/AppContext';
 import { Music } from '@/types/music';
 
 interface GroupedSongs {
-  [letter: string]: Music[];
+  [groupKey: string]: Music[];
 }
 
 export default function AllSongsScreen() {
   const { isDarkMode, songs } = useApp();
   const colors = isDarkMode ? Colors.dark : Colors.light;
 
+  // Lógica de agrupamento e ordenação priorizando o campo 'code'
   const groupedSongs = useMemo(() => {
-    return songs.reduce((acc, song) => {
-      const firstLetter = song.title[0]?.toUpperCase() || '#';
-      if (!acc[firstLetter]) {
-        acc[firstLetter] = [];
+    // Primeiro, ordena todas as músicas
+    const sortedSongs = [...songs].sort((a, b) => {
+      if (a.code && b.code) {
+        return a.code.localeCompare(b.code); // Ordena pelo código se ambos existirem
       }
-      acc[firstLetter].push(song);
+      if (a.code) return -1; // Músicas com código vêm primeiro
+      if (b.code) return 1; // Músicas sem código vêm depois
+      return a.title.localeCompare(b.title); // Ordena pelo título como fallback
+    });
+
+    // Depois, agrupa as músicas ordenadas
+    return sortedSongs.reduce((acc, song) => {
+      // Usa o 'code' para agrupar. Se não houver, usa a primeira letra do título.
+      const groupKey = song.code ? song.code.charAt(0).toUpperCase() : '#';
+      
+      if (!acc[groupKey]) {
+        acc[groupKey] = [];
+      }
+      acc[groupKey].push(song);
       return acc;
     }, {} as GroupedSongs);
   }, [songs]);
@@ -38,6 +52,13 @@ export default function AllSongsScreen() {
   const navigateToSong = useCallback((id: string) => {
     router.push(`/song/${id}`);
   }, []);
+
+  // Ordena as chaves do grupo (letras e '#')
+  const sortedGroupKeys = Object.keys(groupedSongs).sort((a, b) => {
+    if (a === '#') return 1; // Mantém '#' no final
+    if (b === '#') return -1;
+    return a.localeCompare(b);
+  });
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -58,31 +79,27 @@ export default function AllSongsScreen() {
           </View>
         ) : (
           <ScrollView>
-            {Object.keys(groupedSongs)
-              .sort()
-              .map((letter) => (
-                <View key={letter} style={styles.section}>
-                  <View style={[styles.letterHeader, { backgroundColor: colors.primary }]}>
-                    <Text style={[styles.letterText, { color: colors.secondary }]}>{letter}</Text>
-                  </View>
-                  {groupedSongs[letter].map((song) => (
-                    <SongListItem
-                      key={song.id}
-                      song={song}
-                      colors={colors}
-                      onPress={() => navigateToSong(song.id.toString())}
-                    />
-                  ))}
+            {sortedGroupKeys.map((key) => (
+              <View key={key} style={styles.section}>
+                <View style={[styles.letterHeader, { backgroundColor: colors.primary }]}>
+                  <Text style={[styles.letterText, { color: colors.secondary }]}>{key}</Text>
                 </View>
-              ))}
+                {groupedSongs[key].map((song) => (
+                  <SongListItem
+                    key={song.id}
+                    song={song}
+                    colors={colors}
+                    onPress={() => navigateToSong(song.id.toString())}
+                  />
+                ))}
+              </View>
+            ))}
           </ScrollView>
         )}
       </SafeAreaView>
     </View>
   );
 }
-
-// A definição local do componente foi removida daqui
 
 const styles = StyleSheet.create({
   container: {

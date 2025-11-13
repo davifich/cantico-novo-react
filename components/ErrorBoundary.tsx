@@ -2,7 +2,7 @@ import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { router } from 'expo-router';
 
-import Colors from '@/constants/colors';
+import Colors from '../constants/colors';
 
 interface Props {
   children: ReactNode;

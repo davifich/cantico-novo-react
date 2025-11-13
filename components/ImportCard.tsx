@@ -3,7 +3,7 @@ import { LucideIcon } from 'lucide-react-native';
 import React, { memo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 
-import Colors from '@/constants/colors';
+import Colors from '../constants/colors';
 
 // 1. A interface de Props agora aceita a propriedade opcional `disabled`
 interface ImportCardProps {

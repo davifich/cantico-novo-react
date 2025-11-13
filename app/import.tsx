@@ -11,25 +11,27 @@ import {
   StatusBar,
   Alert,
   ActivityIndicator,
+  Modal,
+  TouchableOpacity,
+  Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 
 import FloatingNavMenu from '@/components/FloatingNavMenu';
-import ImportCard from '@/components/ImportCard'; // Importa o componente modularizado
+import ImportCard from '@/components/ImportCard';
 import Colors from '@/constants/colors';
 import { useApp } from '@/contexts/AppContext';
-
-// As definições locais de ImportCardProps e ImportCard foram removidas.
 
 export default function ImportScreen() {
   const { isDarkMode } = useApp();
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [isInfoVisible, setInfoVisible] = useState(false);
 
   const colors = isDarkMode ? Colors.dark : Colors.light;
 
   const handleFileImport = useCallback(async () => {
-    if (isProcessing) return; // Previne cliques múltiplos
+    if (isProcessing) return;
     try {
       const result = await DocumentPicker.getDocumentAsync({
         type: [
@@ -39,9 +41,7 @@ export default function ImportScreen() {
         copyToCacheDirectory: true,
       });
 
-      if (result.canceled) {
-        return;
-      }
+      if (result.canceled) return;
 
       if (result.assets && result.assets.length > 0) {
         setIsProcessing(true);
@@ -52,8 +52,6 @@ export default function ImportScreen() {
           params: { uri: asset.uri, name: asset.name, mimeType: asset.mimeType || '' },
         });
 
-        // O estado de processamento é resetado na tela de verificação ou se o usuário voltar.
-        // Adicionamos um timeout para garantir que ele seja resetado se a navegação falhar.
         setTimeout(() => setIsProcessing(false), 3000);
       }
     } catch (error) {
@@ -104,11 +102,11 @@ export default function ImportScreen() {
               description="Selecione um arquivo .docx ou .pdf do seu dispositivo."
               colors={colors}
               onPress={handleFileImport}
-              disabled={isProcessing} // A propriedade disabled agora funciona corretamente
+              disabled={isProcessing}
             />
           </View>
 
-          <View style={styles.section}>
+          <View style={[styles.section, { marginBottom: 20 }]}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Criar Manualmente</Text>
             <ImportCard
               icon={Upload}
@@ -116,25 +114,41 @@ export default function ImportScreen() {
               description="Crie letra, cifras e adicione partituras do zero."
               colors={colors}
               onPress={handleCreateNew}
-              disabled={isProcessing} // A propriedade disabled agora funciona corretamente
+              disabled={isProcessing}
             />
-          </View>
-
-          <View style={[styles.infoCard, { backgroundColor: colors.card }]}>
-            <AlertCircle size={20} color={colors.primary} />
-            <Text style={[styles.infoText, { color: colors.textSecondary }]}>
-              O app analisará o conteúdo do arquivo para identificar letras e cifras automaticamente. Partituras em PDF poderão ser salvas.
-            </Text>
           </View>
         </ScrollView>
 
         <FloatingNavMenu />
+
+        <Modal
+          transparent
+          visible={isInfoVisible}
+          animationType="slide"
+          onRequestClose={() => setInfoVisible(false)}
+        >
+          <Pressable style={styles.modalOverlay} onPress={() => setInfoVisible(false)}>
+            <View style={[styles.popoverContainer, { backgroundColor: colors.card }]}>
+              <Text style={[styles.infoText, { color: colors.textSecondary }]}>
+                O app analisará o conteúdo do arquivo para identificar letras e cifras automaticamente. Partituras em PDF poderão ser salvas.
+              </Text>
+            </View>
+          </Pressable>
+        </Modal>
+
+        <TouchableOpacity
+          style={[styles.infoButton, { backgroundColor: colors.card }]}
+          onPress={() => setInfoVisible(true)} // Changed from onLongPress to onPress
+          activeOpacity={0.8}
+        >
+          <AlertCircle size={24} color={colors.primary} />
+        </TouchableOpacity>
+
       </SafeAreaView>
     </View>
   );
 }
 
-// Os estilos específicos do ImportCard foram movidos para o seu próprio arquivo.
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -165,7 +179,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 20,
-    paddingBottom: 100,
+    paddingBottom: 20,
   },
   section: {
     marginBottom: 32,
@@ -176,20 +190,6 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     letterSpacing: 0.3,
   },
-  infoCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    borderRadius: 12,
-    padding: 16,
-    gap: 12,
-    marginTop: 8,
-  },
-  infoText: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: '500',
-    lineHeight: 19,
-  },
   loadingMessage: {
     alignItems: 'center',
     marginBottom: 20,
@@ -198,5 +198,40 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 15,
     fontWeight: '600',
+  },
+  infoButton: {
+    position: 'absolute',
+    bottom: 95,
+    left: 20,
+    padding: 14,
+    borderRadius: 99,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
+    elevation: 5,
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  popoverContainer: {
+    width: '100%',
+    padding: 24,
+    paddingBottom: 40, 
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 20,
+  },
+  infoText: {
+    fontSize: 15,
+    fontWeight: '500',
+    lineHeight: 22,
+    textAlign: 'center',
   },
 });

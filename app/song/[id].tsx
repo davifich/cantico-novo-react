@@ -13,17 +13,51 @@ import {
   Dimensions,
 } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import Pdf from 'react-native-pdf';
+import { WebView } from 'react-native-webview';
 
+import CifraViewer from '@/components/CifraViewer';
 import Colors from '@/constants/colors';
 import { useApp } from '@/contexts/AppContext';
-import { Music } from '@/types/music';
 import { getPreference, setPreference } from '@/lib/database';
-import CifraViewer from '@/components/CifraViewer';
+import { Music } from '@/types/music';
 
 const ZOOM_LEVELS = [1, 1.15, 1.3] as const;
 
 type ViewMode = 'letra' | 'cifra' | 'partitura';
+
+/**
+ * Processa o texto da letra para aplicar formatação customizada.
+ * - Texto entre *asteriscos* vira negrito.
+ * - Uma linha contendo apenas / é tratada como uma quebra de estrofe.
+ */
+const renderFormattedLyrics = (text: string, style: any) => {
+  const lines = text.split('\n');
+
+  return lines.map((line, lineIndex) => {
+    // Verifica se a linha é um separador de estrofe
+    if (line.trim() === '/') {
+      return <View key={lineIndex} style={styles.stanzaBreak} />;
+    }
+
+    // Divide a linha por palavras entre asteriscos para aplicar o negrito
+    const parts = line.split(/(\*.*?\*)/g);
+
+    return (
+      <Text key={lineIndex} style={style}>
+        {parts.map((part, partIndex) => {
+          if (part.startsWith('*') && part.endsWith('*')) {
+            return (
+              <Text key={partIndex} style={{ fontWeight: 'bold' }}>
+                {part.slice(1, -1)}
+              </Text>
+            );
+          }
+          return part;
+        })}
+      </Text>
+    );
+  });
+};
 
 export default function SongScreen() {
   const { id: idString } = useLocalSearchParams<{ id: string }>();
@@ -42,12 +76,9 @@ export default function SongScreen() {
 
     if (currentSong) {
       getPreference(`song_${currentSong.id}_viewMode`).then(mode => {
-        if (mode === 'cifra' && !currentSong.has_cifra) {
-          return setViewMode('letra');
-        }
-        if (mode === 'partitura' && !currentSong.has_partitura) {
-          return setViewMode('letra');
-        }
+        if (mode === 'cifra' && !currentSong.has_cifra) return setViewMode('letra');
+        if (mode === 'partitura' && !currentSong.has_partitura) return setViewMode('letra');
+        
         if (mode) {
           setViewMode(mode as ViewMode);
         } else {
@@ -59,24 +90,27 @@ export default function SongScreen() {
 
   const handleSelectMode = useCallback((mode: ViewMode) => {
     setViewMode(mode);
-    if (song) {
-      setPreference(`song_${song.id}_viewMode`, mode);
-    }
+    if (song) setPreference(`song_${song.id}_viewMode`, mode);
   }, [song]);
 
   const handleZoomIn = useCallback(() => {
-    if (zoomLevel < ZOOM_LEVELS.length - 1) setZoomLevel(zoomLevel + 1);
+    if (zoomLevel < ZOOM_LEVELS.length - 1) setZoomLevel(z => z + 1);
   }, [zoomLevel]);
 
   const handleZoomOut = useCallback(() => {
-    if (zoomLevel > 0) setZoomLevel(zoomLevel - 1);
+    if (zoomLevel > 0) setZoomLevel(z => z - 1);
   }, [zoomLevel]);
+
+  const displayTitle = useMemo(() => {
+    if (!song) return 'Carregando...';
+    return song.code ? `${song.code} - ${song.title}` : song.title;
+  }, [song]);
 
   const renderContent = () => {
     if (!song) return null;
 
     if (viewMode === 'partitura' && song.has_partitura && song.file_path) {
-      return <Pdf source={{ uri: song.file_path }} style={styles.pdf} trustAllCerts={false} />;
+      return <WebView source={{ uri: song.file_path }} style={styles.pdf} />;
     }
     if (viewMode === 'cifra' && song.has_cifra && song.cifra) {
       return <ScrollView><CifraViewer content={song.cifra} zoomFactor={ZOOM_LEVELS[zoomLevel]} /></ScrollView>;
@@ -85,9 +119,8 @@ export default function SongScreen() {
       return (
         <ScrollView contentContainerStyle={styles.scrollContent}>
           {song.artist && <Text style={[styles.artist, { color: colors.textSecondary }]}>{song.artist}</Text>}
-          <Text style={[styles.lyrics, { color: colors.text, fontSize: 16 * ZOOM_LEVELS[zoomLevel] }]}>
-            {song.letra}
-          </Text>
+          {/* Aqui usamos a nova função para renderizar a letra formatada */}
+          {renderFormattedLyrics(song.letra, [styles.lyrics, { color: colors.text, fontSize: 16 * ZOOM_LEVELS[zoomLevel] }])}
         </ScrollView>
       );
     }
@@ -111,7 +144,7 @@ export default function SongScreen() {
 
   return (
     <GestureHandlerRootView style={[styles.container, { backgroundColor: colors.background }]}>
-      <Stack.Screen options={{ title: song.title }} />
+      <Stack.Screen options={{ title: displayTitle }} />
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
 
       <View style={[styles.topBar, { borderBottomColor: colors.border }]}>
@@ -149,7 +182,6 @@ export default function SongScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  headerButton: { marginRight: 16, padding: 4 },
   topBar: {
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -172,4 +204,8 @@ const styles = StyleSheet.create({
   lyrics: { lineHeight: 28, fontWeight: '500' },
   emptyCard: { padding: 32, borderRadius: 12, alignItems: 'center', marginTop: 40, marginHorizontal: 20 },
   emptyText: { fontSize: 15, fontWeight: '500', textAlign: 'center' },
+  // Estilo para a quebra de estrofe
+  stanzaBreak: {
+    height: 16, // Cria um espaço vertical entre as estrofes
+  },
 });

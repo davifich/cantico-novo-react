@@ -1,7 +1,7 @@
 
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import Colors from '@/constants/colors';
+import Colors from '../constants/colors';
 
 interface CifraViewerProps {
   content: string;

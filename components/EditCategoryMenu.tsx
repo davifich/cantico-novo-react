@@ -11,9 +11,9 @@ import {
   ActivityIndicator,
 } from 'react-native';
 
-import Colors from '@/constants/colors';
-import { useApp } from '@/contexts/AppContext';
-import { Music } from '@/types/music';
+import Colors from '../constants/colors';
+import { useApp } from '../contexts/AppContext';
+import { Music } from '../types/music';
 
 interface EditCategoryMenuProps {
   song: Music;

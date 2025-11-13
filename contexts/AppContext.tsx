@@ -1,4 +1,3 @@
-
 import React, { 
   createContext, 
   useContext, 
@@ -16,8 +15,6 @@ import NetInfo from '@react-native-community/netinfo';
 
 import * as DB from '@/lib/database';
 import { Music, Category, AddSongDTO } from '@/types/music';
-
-// --- Definição de Tipos ---
 
 interface QuickAccessItem {
   songId: number;
@@ -48,8 +45,6 @@ interface AppContextType {
   removeSongFromCategory: (songId: number, categoryId: number) => Promise<void>;
 }
 
-// --- Contexto e Provider ---
-
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const useApp = () => {
@@ -71,18 +66,22 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [quickAccess, setQuickAccess] = useState<QuickAccessItem[]>([]);
 
-  // --- Efeitos ---
-
+  // ✅ CORREÇÃO: Remove await DB.initDatabase() daqui (já foi feito no _layout)
   useEffect(() => {
     const loadInitialData = async () => {
       try {
+        console.log('[AppContext] Carregando dados iniciais...');
         setIsLoading(true);
-        await DB.initDatabase();
+        
+        // ⚠️ NÃO chama initDatabase() aqui - já foi inicializado no _layout
         await Promise.all([
           refreshSongs(), 
           refreshCategories(),
           loadQuickAccess(),
         ]);
+        
+        console.log('[AppContext] ✅ Dados carregados com sucesso');
+
         const savedTheme = await AsyncStorage.getItem('theme');
         if (savedTheme) {
           setIsDarkMode(savedTheme === 'dark');
@@ -90,11 +89,12 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
           setIsDarkMode(Appearance.getColorScheme() === 'dark');
         }
       } catch (error) {
-        console.error('[AppContext] Falha na inicialização:', error);
+        console.error('[AppContext] ❌ Falha ao carregar dados:', error);
       } finally {
         setIsLoading(false);
       }
     };
+
     loadInitialData();
 
     const unsubscribeNetInfo = NetInfo.addEventListener(state => {
@@ -109,15 +109,23 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   // --- Funções de Manipulação de Dados ---
 
   const refreshSongs = useCallback(async () => {
-    // CORREÇÃO: Usando o nome correto da função do banco de dados.
-    const allSongs = await DB.getAllSongs();
-    setSongs(allSongs);
+    try {
+      const allSongs = await DB.getAllSongs();
+      setSongs(allSongs);
+    } catch (error) {
+      console.error('[AppContext] Erro ao carregar músicas:', error);
+      throw error;
+    }
   }, []);
 
   const refreshCategories = useCallback(async () => {
-    // CORREÇÃO: Usando o nome correto da função do banco de dados.
-    const allCategories = await DB.getAllCategories();
-    setCategories(allCategories);
+    try {
+      const allCategories = await DB.getAllCategories();
+      setCategories(allCategories);
+    } catch (error) {
+      console.error('[AppContext] Erro ao carregar categorias:', error);
+      throw error;
+    }
   }, []);
 
   const addSong = useCallback(async (song: AddSongDTO): Promise<number | null> => {
@@ -184,14 +192,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     try {
       const stored = await AsyncStorage.getItem('@quickAccessSongs');
       if (stored) {
-        const items: QuickAccessItem[] = JSON.parse(stored);
-        const now = Date.now();
-        const twentyFourHours = 24 * 60 * 60 * 1000;
-        const validItems = items.filter(item => (now - item.addedAt) < twentyFourHours);
-        setQuickAccess(validItems);
-        if (validItems.length < items.length) {
-          await AsyncStorage.setItem('@quickAccessSongs', JSON.stringify(validItems));
-        }
+        setQuickAccess(JSON.parse(stored));
       }
     } catch (error) {
       console.error('[AppContext] Falha ao carregar Acesso Rápido:', error);
@@ -221,23 +222,64 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     await AsyncStorage.setItem('theme', newTheme);
   }, [isDarkMode]);
 
-  const filteredSongs = useMemo(() =>
-    songs.filter(song => 
-      song.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      song.artist?.toLowerCase().includes(searchQuery.toLowerCase())
-    ), [songs, searchQuery]);
+  const filteredSongs = useMemo(() => {
+    const lowerCaseQuery = searchQuery.toLowerCase().trim();
+
+    if (!lowerCaseQuery) {
+      return [];
+    }
+
+    const matchedIds = new Set<number>();
+    const result: Music[] = [];
+
+    const addToResult = (song: Music) => {
+      if (!matchedIds.has(song.id)) {
+        matchedIds.add(song.id);
+        result.push(song);
+      }
+    };
+
+    // 1. Busca por código
+    songs.forEach(song => {
+      if (song.code && song.code.toLowerCase().startsWith(lowerCaseQuery)) {
+        addToResult(song);
+      }
+    });
+
+    // 2. Busca por título
+    songs.forEach(song => {
+      if (song.title.toLowerCase().includes(lowerCaseQuery)) {
+        addToResult(song);
+      }
+    });
+
+    // 3. Busca por letra
+    if (result.length < 8) {
+      songs.forEach(song => {
+        if (song.letra && song.letra.toLowerCase().includes(lowerCaseQuery)) {
+          addToResult(song);
+        }
+      });
+    }
+
+    return result.slice(0, 8);
+  }, [songs, searchQuery]);
 
   const recentSongs = useMemo(() => 
     [...songs].sort((a, b) => b.id - a.id).slice(0, 5), 
     [songs]
   );
 
-  const quickAccessSongs = useMemo(() => 
-    quickAccess
+  const quickAccessSongs = useMemo(() => {
+    const now = Date.now();
+    const twentyFourHours = 24 * 60 * 60 * 1000;
+
+    const validItems = quickAccess.filter(item => (now - item.addedAt) < twentyFourHours);
+
+    return validItems
       .map(item => songs.find(s => s.id === item.songId))
-      .filter((s): s is Music => s !== undefined), 
-    [quickAccess, songs]
-  );
+      .filter((s): s is Music => s !== undefined);
+  }, [quickAccess, songs]);
 
   const value = useMemo(
     () => ({

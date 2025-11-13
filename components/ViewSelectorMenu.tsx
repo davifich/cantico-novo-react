@@ -9,8 +9,8 @@ import {
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 import { CaseSensitive, Music, FileText, X } from 'lucide-react-native'; // CORREÇÃO: Ícones importados da biblioteca correta
 
-import Colors from '@/constants/colors';
-import { useApp } from '@/contexts/AppContext';
+import Colors from '../constants/colors';
+import { useApp } from '../contexts/AppContext';
 
 interface ViewSelectorMenuProps {
   sheetRef: React.RefObject<BottomSheet>;
