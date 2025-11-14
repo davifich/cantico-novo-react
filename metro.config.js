@@ -3,8 +3,8 @@ const { getDefaultConfig } = require('expo/metro-config');
 /** @type {import('expo/metro-config').MetroConfig} */
 const config = getDefaultConfig(__dirname);
 
-// Adiciona a extensão .db à lista de assets
-config.resolver.assetExts.push('db');
+// Adiciona as extensões .db e .wasm à lista de assets
+config.resolver.assetExts.push('db', 'wasm');
 
 // Desabilita package exports que causam o erro de require
 config.resolver.unstable_enablePackageExports = false;

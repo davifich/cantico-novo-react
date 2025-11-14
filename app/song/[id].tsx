@@ -16,6 +16,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { WebView } from 'react-native-webview';
 
 import CifraViewer from '@/components/CifraViewer';
+import FloatingFuncMenu from "@/components/FloatingFuncMenu";
 import Colors from '@/constants/colors';
 import { useApp } from '@/contexts/AppContext';
 import { getPreference, setPreference } from '@/lib/database';
@@ -176,6 +177,8 @@ export default function SongScreen() {
       </View>
 
       <View style={styles.contentContainer}>{renderContent()}</View>
+
+      <FloatingFuncMenu />
     </GestureHandlerRootView>
   );
 }

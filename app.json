@@ -2,7 +2,7 @@
   "expo": {
     "name": "cantico-novo",
     "slug": "cantico-novo",
-    "scheme":"cantico-novo",
+    "scheme": "cantico-novo",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -14,16 +14,18 @@
     },
     "assetBundlePatterns": [
       "**/*",
-       "assets/db/*.db"
+      "assets/db/*.db"
     ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.anonymous.canticonovo"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "package": "com.anonymous.canticonovo"
     },
     "web": {
       "bundler": "metro",
@@ -37,6 +39,5 @@
       "typedRoutes": true
     },
     "main": "expo-router/entry"
-
   }
 }
