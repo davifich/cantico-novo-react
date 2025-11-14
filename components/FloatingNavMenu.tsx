@@ -24,9 +24,7 @@ interface NavButtonProps {
 }
 
 const NavButton = memo(({ icon: Icon, isActive, onPress, colors }: NavButtonProps) => {
-  // CORREÇÃO: 'isDarkMode' foi movido para antes de seu uso.
-  const { isDarkMode } = useApp();
-  const inactiveColor = useMemo(() => (isDarkMode ? 'rgba(255, 255, 255, 0.7)' : 'rgba(26, 31, 58, 0.7)'), [isDarkMode]);
+  const inactiveColor = '#FFFFFF';
 
   return (
     <TouchableOpacity

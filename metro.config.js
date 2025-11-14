@@ -3,17 +3,18 @@ const { getDefaultConfig } = require('expo/metro-config');
 /** @type {import('expo/metro-config').MetroConfig} */
 const config = getDefaultConfig(__dirname);
 
+// Adiciona a extensão .db à lista de assets
+config.resolver.assetExts.push('db');
+
 // Desabilita package exports que causam o erro de require
 config.resolver.unstable_enablePackageExports = false;
 
 // Configura polyfills necessários
 config.resolver.extraNodeModules = {
-  // Polyfills vazios para módulos Node.js não usados
   crypto: require.resolve('crypto-browserify'),
   stream: require.resolve('readable-stream'),
   buffer: require.resolve('@craftzdog/react-native-buffer'),
   process: require.resolve('process/browser'),
-  // Módulos vazios para evitar erros
   fs: require.resolve('react-native-fs'),
   path: require.resolve('path-browserify'),
   http: require.resolve('stream-http'),
@@ -23,7 +24,11 @@ config.resolver.extraNodeModules = {
   zlib: require.resolve('browserify-zlib'),
   net: require.resolve('react-native-tcp-socket'),
   tls: require.resolve('react-native-tcp-socket'),
+
+  // 🔧 Corrige erro do Metro com 'copy-anything'
+  'copy-anything': require.resolve('copy-anything'),
 };
+
 
 // Configurações de transformação
 config.transformer.getTransformOptions = async () => ({

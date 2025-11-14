@@ -3,10 +3,11 @@
   "main": "expo-router/entry",
   "version": "1.0.0",
   "scripts": {
-    "start": "expo start",
+    "start": "expo start --dev-client --clear",
     "web": "expo start --web",
     "lint": "eslint .",
     "android": "expo run:android",
+    "start:android": "expo run:android",
     "ios": "expo run:ios",
     "db:seed": "tsx --tsconfig tsconfig.backend.json scripts/seed-database.ts",
     "backend:dev": "cd backend && tsx watch index.ts",
@@ -100,5 +101,8 @@
     "tsx": "^4.20.6",
     "typescript": "^5.7.2"
   },
-  "private": true
+  "private": true,
+  "overrides": {
+    "copy-anything": "3.0.2"
+  }
 }
