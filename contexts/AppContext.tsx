@@ -13,8 +13,8 @@ import { useColorScheme, Appearance } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 
-import * as DB from '@/lib/database';
-import { Music, Category, AddSongDTO } from '@/types/music';
+import * as DB from '../lib/database';
+import { Music, Category, AddSongDTO, UpdateSongDTO } from '../types/music';
 
 interface QuickAccessItem {
   songId: number;
@@ -36,6 +36,7 @@ interface AppContextType {
   addToQuickAccess: (songId: number) => Promise<void>;
   removeFromQuickAccess: (songId: number) => Promise<void>;
   addSong: (song: AddSongDTO) => Promise<number | null>;
+  updateSong: (id: number, song: UpdateSongDTO) => Promise<void>;
   deleteSong: (id: number) => Promise<void>;
   refreshSongs: () => Promise<void>;
   addCategory: (name: string, color: string) => Promise<number | null>;
@@ -130,12 +131,24 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
   const addSong = useCallback(async (song: AddSongDTO): Promise<number | null> => {
     try {
-      const newSongId = await DB.addSong(song);
+      const personalizedCode = await DB.generateNextPersonalizedCode();
+      const songWithCode = { ...song, code: personalizedCode };
+      const newSongId = await DB.addSong(songWithCode);
       await refreshSongs();
       return newSongId;
     } catch (error) {
       console.error('[AppContext] Falha ao adicionar música:', error);
       return null;
+    }
+  }, [refreshSongs]);
+
+  const updateSong = useCallback(async (id: number, song: UpdateSongDTO) => {
+    try {
+      await DB.updateSongInDb(id, song);
+      await refreshSongs();
+    } catch (error) {
+      console.error(`[AppContext] Falha ao atualizar música ${id}:`, error);
+      throw error; 
     }
   }, [refreshSongs]);
 
@@ -297,6 +310,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       addToQuickAccess,
       removeFromQuickAccess,
       addSong,
+      updateSong,
       deleteSong,
       refreshSongs,
       addCategory,
@@ -308,7 +322,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     [
       isLoading, isDarkMode, isOnline, toggleTheme, songs, categories, searchQuery, 
       filteredSongs, recentSongs, quickAccessSongs, addToQuickAccess, removeFromQuickAccess,
-      addSong, deleteSong, refreshSongs, addCategory, deleteCategory, refreshCategories,
+      addSong, updateSong, deleteSong, refreshSongs, addCategory, deleteCategory, refreshCategories,
       addSongToCategory, removeSongFromCategory
     ]
   );

@@ -10,7 +10,6 @@ import { AppProvider } from "@/contexts/AppContext";
 import { trpc, trpcClient } from "@/lib/trpc";
 import { initDatabase } from "@/lib/database";
 
-// Previne que a splash screen desapareça automaticamente
 SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient({

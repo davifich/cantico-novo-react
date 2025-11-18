@@ -26,21 +26,15 @@ const ZOOM_LEVELS = [1, 1.15, 1.3] as const;
 
 type ViewMode = 'letra' | 'cifra' | 'partitura';
 
-/**
- * Processa o texto da letra para aplicar formatação customizada.
- * - Texto entre *asteriscos* vira negrito.
- * - Uma linha contendo apenas / é tratada como uma quebra de estrofe.
- */
 const renderFormattedLyrics = (text: string, style: any) => {
   const lines = text.split('\n');
 
   return lines.map((line, lineIndex) => {
-    // Verifica se a linha é um separador de estrofe
+
     if (line.trim() === '/') {
       return <View key={lineIndex} style={styles.stanzaBreak} />;
     }
 
-    // Divide a linha por palavras entre asteriscos para aplicar o negrito
     const parts = line.split(/(\*.*?\*)/g);
 
     return (

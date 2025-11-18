@@ -9,7 +9,6 @@ import Colors from '@/constants/colors';
 import { useApp } from '@/contexts/AppContext';
 import { Category } from '@/types/music';
 
-// --- Componente de Card para Categoria ---
 const CategoryCard = memo((
   { category, songCount, colors, onPress }: 
   { category: Category; songCount: number; colors: typeof Colors.light; onPress: () => void; }
@@ -31,13 +30,10 @@ const CategoryCard = memo((
 ));
 CategoryCard.displayName = 'CategoryCard';
 
-
-// --- Tela Principal de Categorias ---
 export default function CategoriesScreen() {
   const { isDarkMode, categories, songs } = useApp();
   const colors = isDarkMode ? Colors.dark : Colors.light;
 
-  // Memoiza o cálculo da contagem de músicas por categoria para otimização
   const categoryCounts = useMemo(() => {
     const counts: Record<number, number> = {};
     for (const song of songs) {
@@ -91,8 +87,6 @@ export default function CategoriesScreen() {
   );
 }
 
-
-// --- Estilos ---
 const styles = StyleSheet.create({
   container: {
     flex: 1,

@@ -1,4 +1,3 @@
-
 import { useLocalSearchParams, router } from 'expo-router';
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import {
@@ -15,9 +14,33 @@ import mammoth from 'mammoth';
 import { decode } from 'base-64';
 import { v4 as uuidv4 } from 'uuid';
 
-import { analyzeTextContent } from '@/lib/music-analyzer';
-import { useApp } from '@/contexts/AppContext';
-import Colors from '@/constants/colors';
+import { analyzeTextContent } from '../lib/music-analyzer';
+import { useApp } from '../contexts/AppContext';
+import Colors from '../constants/colors';
+
+/**
+ * Wrapper simples e compatível com Expo SDK 54.
+ * - evita referências a tipos removidos pelo pacote
+ * - implementa `copyFile` via read/write base64 (substitui copyAsync)
+ */
+const FS = {
+  readAsStringAsync: async (uri: string, opts?: { encoding?: 'utf8' | 'base64' }) =>
+    await FileSystem.readAsStringAsync(uri, (opts as any) ?? undefined),
+
+  writeAsStringAsync: async (uri: string, data: string, opts?: { encoding?: 'utf8' | 'base64' }) =>
+    await FileSystem.writeAsStringAsync(uri, data, (opts as any) ?? undefined),
+
+  makeDirectoryAsync: async (dir: string, opts?: { intermediates?: boolean }) =>
+    await FileSystem.makeDirectoryAsync(dir, (opts as any) ?? undefined),
+
+  documentDirectory: FileSystem.documentDirectory ?? '',
+
+  // copyFile: lê como base64 e escreve como base64 (compatível com expo-file-system v19)
+  copyFile: async (from: string, to: string) => {
+    const data = await FileSystem.readAsStringAsync(from, { encoding: 'base64' } as any);
+    await FileSystem.writeAsStringAsync(to, data, { encoding: 'base64' } as any);
+  },
+};
 
 // Função para converter Base64 para ArrayBuffer (necessária para mammoth)
 function base64ToArrayBuffer(base64: string): ArrayBuffer {
@@ -37,36 +60,49 @@ interface AnalysisState {
 }
 
 export default function VerifyImportScreen() {
-  const params = useLocalSearchParams<{ uri: string; name: string; mimeType: string }>();
-  const { isDarkMode, addSong } = useApp(); 
+  const params = useLocalSearchParams<{ uri?: string; name?: string; mimeType?: string }>();
+  const { isDarkMode, addSong } = useApp();
   const colors = isDarkMode ? Colors.dark : Colors.light;
 
   const [isLoading, setIsLoading] = useState(true);
   const [analysis, setAnalysis] = useState<AnalysisState | null>(null);
   const [isPartitura, setIsPartitura] = useState(false);
 
-  const isPdf = useMemo(() => params.mimeType === 'application/pdf', [params.mimeType]);
+  const isPdf = useMemo(() => params?.mimeType === 'application/pdf', [params?.mimeType]);
 
   useEffect(() => {
     const processFile = async () => {
       try {
-        if (!params.uri) return;
+        if (!params?.uri) return;
+
         let rawText = '';
 
-        if (params.mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-          const base64 = await FileSystem.readAsStringAsync(params.uri, { encoding: 'base64' });
+        if (
+          params?.mimeType ===
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        ) {
+          // Ler .docx como base64, converter para ArrayBuffer e extrair texto com mammoth
+          const base64 = await FS.readAsStringAsync(params.uri, { encoding: 'base64' });
           const arrayBuffer = base64ToArrayBuffer(base64);
           const mammothResult = await mammoth.extractRawText({ arrayBuffer });
-          rawText = mammothResult.value;
+          rawText = mammothResult?.value ?? '';
         } else if (isPdf) {
-          rawText = `(Texto extraído do PDF: ${params.name})\n\n[G]Amazing [C]grace, how [G]sweet the [D]sound`;
+          // Placeholder para PDF (você pode trocar por extração real se adicionar lib)
+          rawText = `(Texto extraído do PDF: ${params?.name ?? 'arquivo.pdf'})\n\n[G]Amazing [C]grace, how [G]sweet the [D]sound`;
+        } else {
+          // Fallback: tentar ler como texto utf8
+          try {
+            rawText = await FS.readAsStringAsync(params.uri, { encoding: 'utf8' });
+          } catch {
+            rawText = '';
+          }
         }
 
         const analysisResult = analyzeTextContent(rawText);
         setAnalysis(analysisResult);
       } catch (error) {
-        console.error("Erro ao processar arquivo:", error);
-        Alert.alert("Erro de Análise", "Não foi possível analisar o conteúdo do arquivo.", [
+        console.error('Erro ao processar arquivo:', error);
+        Alert.alert('Erro de Análise', 'Não foi possível analisar o conteúdo do arquivo.', [
           { text: 'OK', onPress: () => router.back() },
         ]);
       } finally {
@@ -75,7 +111,8 @@ export default function VerifyImportScreen() {
     };
 
     processFile();
-  }, [params, isPdf]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params?.uri, params?.mimeType, isPdf]);
 
   const handleConfirmImport = useCallback(async () => {
     if (!analysis) return;
@@ -84,17 +121,19 @@ export default function VerifyImportScreen() {
       setIsLoading(true);
       let filePath: string | null = null;
 
-      if (isPartitura && isPdf) {
-        // CORREÇÃO: Usando asserção de tipo (as any) como uma válvula de escape para o compilador TypeScript.
-        const docDir = ((FileSystem as any).documentDirectory || '') + 'partituras/';
-        await FileSystem.makeDirectoryAsync(docDir, { intermediates: true });
+      if (isPartitura && isPdf && params?.uri) {
+        const dir = FS.documentDirectory + 'partituras/';
+        await FS.makeDirectoryAsync(dir, { intermediates: true });
+
         const newFileName = `${uuidv4()}.pdf`;
-        filePath = `${docDir}${newFileName}`;
-        await FileSystem.copyAsync({ from: params.uri!, to: filePath });
+        filePath = `${dir}${newFileName}`;
+
+        // substitui copyAsync (removido) por copyFile implementado
+        await FS.copyFile(params.uri, filePath);
       }
-      
+
       const songId = await addSong({
-        title: params.name?.replace(/\.(docx|pdf)$/, '') || 'Nova Música',
+        title: params?.name?.replace(/\.(docx|pdf)$/i, '') || 'Nova Música',
         letra: analysis.letra,
         cifra: analysis.cifra,
         file_path: filePath,
@@ -104,24 +143,29 @@ export default function VerifyImportScreen() {
       });
 
       if (songId) {
-        Alert.alert("Sucesso!", "A música foi importada para o seu repertório.", [
+        Alert.alert('Sucesso!', 'A música foi importada para o seu repertório.', [
           { text: 'Ver Música', onPress: () => router.replace(`/song/${songId}`) },
           { text: 'OK', style: 'cancel', onPress: () => router.back() },
         ]);
       } else {
-        throw new Error("Falha ao obter ID da música após inserção.");
+        throw new Error('Falha ao obter ID da música após inserção.');
       }
-
     } catch (error) {
-      console.error("Erro ao salvar música:", error);
-      Alert.alert("Erro ao Salvar", "Não foi possível salvar a música no banco de dados.");
+      console.error('Erro ao salvar música:', error);
+      Alert.alert('Erro ao Salvar', 'Não foi possível salvar a música no banco de dados.');
+    } finally {
       setIsLoading(false);
     }
-  }, [analysis, isPartitura, isPdf, params, addSong]);
+  }, [analysis, isPartitura, isPdf, params?.uri, params?.name, addSong]);
 
   if (isLoading || !analysis) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center' }]}>
+      <View
+        style={[
+          styles.container,
+          { backgroundColor: colors.background, justifyContent: 'center' },
+        ]}
+      >
         <ActivityIndicator size="large" color={colors.primary} />
         <Text style={[styles.loadingText, { color: colors.text }]}>Analisando arquivo...</Text>
       </View>
@@ -132,13 +176,15 @@ export default function VerifyImportScreen() {
     <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.content}>
         <Text style={[styles.title, { color: colors.text }]}>Verificação de Importação</Text>
-        
+
         <View style={[styles.card, { backgroundColor: colors.card }]}>
           <Text style={[styles.cardTitle, { color: colors.text }]}>Análise do Conteúdo</Text>
           {analysis.has_cifra ? (
             <Text style={[styles.analysisText, { color: colors.success }]}>✓ Cifras detectadas</Text>
           ) : (
-            <Text style={[styles.analysisText, { color: colors.textSecondary }]}>Nenhuma cifra detectada</Text>
+            <Text style={[styles.analysisText, { color: colors.textSecondary }]}>
+              Nenhuma cifra detectada
+            </Text>
           )}
           <Text style={[styles.previewLabel, { color: colors.textSecondary }]}>Prévia da letra:</Text>
           <Text style={[styles.previewText, { color: colors.text }]} numberOfLines={5}>
@@ -152,23 +198,34 @@ export default function VerifyImportScreen() {
             <Text style={[styles.question, { color: colors.textSecondary }]}>
               Este arquivo PDF é uma partitura musical que você deseja salvar?
             </Text>
-            <TouchableOpacity 
-              style={styles.toggleContainer} 
+
+            <TouchableOpacity
+              style={styles.toggleContainer}
               onPress={() => setIsPartitura(!isPartitura)}
             >
               <View style={[styles.checkbox, { borderColor: colors.primary }]}>
-                {isPartitura && <View style={[styles.checkboxInner, { backgroundColor: colors.primary }]}/>}
+                {isPartitura && (
+                  <View
+                    style={[styles.checkboxInner, { backgroundColor: colors.primary }]}
+                  />
+                )}
               </View>
               <Text style={[styles.toggleText, { color: colors.text }]}>Sim, é uma partitura</Text>
             </TouchableOpacity>
           </View>
         )}
 
-        <TouchableOpacity style={[styles.confirmButton, { backgroundColor: colors.primary }]} onPress={handleConfirmImport}>
+        <TouchableOpacity
+          style={[styles.confirmButton, { backgroundColor: colors.primary }]}
+          onPress={handleConfirmImport}
+        >
           <Text style={styles.confirmButtonText}>Concluir Importação</Text>
         </TouchableOpacity>
+
         <TouchableOpacity style={styles.cancelButton} onPress={() => router.back()}>
-          <Text style={[styles.cancelButtonText, { color: colors.textSecondary }]}>Cancelar</Text>
+          <Text style={[styles.cancelButtonText, { color: colors.textSecondary }]}>
+            Cancelar
+          </Text>
         </TouchableOpacity>
       </View>
     </ScrollView>
@@ -183,7 +240,7 @@ const styles = StyleSheet.create({
   card: { borderRadius: 12, padding: 16, marginBottom: 20 },
   cardTitle: { fontSize: 18, fontWeight: '700', marginBottom: 12 },
   analysisText: { fontSize: 16, fontWeight: '500', marginBottom: 12 },
-  previewLabel: { fontSize: 14, fontWeight: '500', color: 'gray', marginBottom: 8 },
+  previewLabel: { fontSize: 14, fontWeight: '500', marginBottom: 8 },
   previewText: { fontFamily: 'monospace', fontSize: 14, lineHeight: 20 },
   question: { fontSize: 16, marginBottom: 16, lineHeight: 22 },
   toggleContainer: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8 },

@@ -1,10 +1,7 @@
 
 import { getDB } from './db-connection';
-import { AddSongDTO, Category, Music } from '../types/music';
+import { AddSongDTO, Category, Music, UpdateSongDTO } from '../types/music';
 
-/**
- * Prepara o banco de dados, criando e migrando tabelas se necessário.
- */
 export async function initDatabase() {
   try {
     console.log('[Database] Iniciando inicialização do banco de dados...');
@@ -57,7 +54,6 @@ export async function initDatabase() {
     `);
     console.log('[Database] Tabela user_preferences verificada/criada');
 
-    // Migrações
     const versionResult = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
     const currentVersion = versionResult ? versionResult.user_version : 0;
     console.log(`[Database] Versão atual do banco: ${currentVersion}`);
@@ -155,6 +151,35 @@ export async function addSong(song: AddSongDTO): Promise<number> {
   return newSongId;
 }
 
+export async function updateSongInDb(id: number, song: UpdateSongDTO): Promise<void> {
+    const db = await getDB();
+
+    await db.withTransactionAsync(async () => {
+        await db.runAsync(
+            `UPDATE songs 
+             SET title = ?, artist = ?, letra = ?, cifra = ?, has_cifra = ?, has_partitura = ?
+             WHERE id = ?`,
+            [
+                song.title,
+                song.artist || null,
+                song.letra || null,
+                song.cifra || null,
+                song.has_cifra,
+                song.has_partitura,
+                id
+            ]
+        );
+
+        if (song.category_ids) {
+            await db.runAsync('DELETE FROM song_categories WHERE song_id = ?', [id]);
+
+            for (const categoryId of song.category_ids) {
+                await db.runAsync('INSERT INTO song_categories (song_id, category_id) VALUES (?, ?)', [id, categoryId]);
+            }
+        }
+    });
+}
+
 export async function deleteSong(id: number): Promise<void> {
   const db = await getDB();
   await db.runAsync('DELETE FROM songs WHERE id = ?', [id]);
@@ -180,4 +205,23 @@ export async function setPreference(key: string, value: unknown): Promise<void> 
   const db = await getDB();
   const valueStr = typeof value === 'string' ? value : JSON.stringify(value);
   await db.runAsync('INSERT INTO user_preferences (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', [key, valueStr]);
+}
+
+export async function generateNextPersonalizedCode(): Promise<string> {
+  const db = await getDB();
+  const personalizedSongs = await db.getAllAsync<{ code: string }>("SELECT code FROM songs WHERE code LIKE 'P%'");
+  
+  let maxNumber = 0;
+  if (personalizedSongs && personalizedSongs.length > 0) {
+    for (const song of personalizedSongs) {
+      if (song.code) {
+        const numberPart = parseInt(song.code.substring(1), 10);
+        if (!isNaN(numberPart) && numberPart > maxNumber) {
+          maxNumber = numberPart;
+        }
+      }
+    }
+  }
+  
+  return `P${maxNumber + 1}`;
 }

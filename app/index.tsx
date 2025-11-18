@@ -1,4 +1,3 @@
-
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { Search, ListMusic, FolderTree, Bell } from 'lucide-react-native';
@@ -15,7 +14,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
 
 import FloatingNavMenu from '@/components/FloatingNavMenu';
 import NotificationPopover, { Notification } from '@/components/NotificationPopover';
@@ -60,17 +58,26 @@ const sampleNotifications: Notification[] = [
 
 const NOTIFICATIONS_STORAGE_KEY = '@cantico_novo_notifications';
 
-
 // --- Tela Principal ---
 export default function HomeScreen() {
-  const { isDarkMode, filteredSongs, recentSongs, searchQuery, setSearchQuery, isLoading } = useApp();
+  const {
+    isDarkMode,
+    filteredSongs,
+    recentSongs,
+    searchQuery,
+    setSearchQuery,
+    isLoading,
+    addToQuickAccess,       // <-- precisa existir no AppContext
+    removeFromQuickAccess,  // <-- precisa existir no AppContext
+    quickAccessSongs        // <-- precisa existir no AppContext
+  } = useApp();
+
   const [localSearch, setLocalSearch] = useState(searchQuery);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isPopoverVisible, setPopoverVisible] = useState(false);
 
   const colors = isDarkMode ? Colors.dark : Colors.light;
 
-  // Efeito para carregar e inicializar as notificações
   useEffect(() => {
     const loadNotifications = async () => {
       try {
@@ -78,20 +85,18 @@ export default function HomeScreen() {
         if (storedNotifications) {
           setNotifications(JSON.parse(storedNotifications));
         } else {
-          // Se não houver nada, inicializa com as de exemplo e salva
           setNotifications(sampleNotifications);
           await AsyncStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(sampleNotifications));
         }
       } catch (error) {
         console.error("Failed to load notifications from storage", error);
-        setNotifications(sampleNotifications); // Fallback para os dados de exemplo em caso de erro
+        setNotifications(sampleNotifications);
       }
     };
 
     loadNotifications();
   }, []);
 
-  // --- Funções de Navegação e Manipulação ---
   const handleSearch = useCallback((text: string) => {
     setLocalSearch(text);
     setSearchQuery(text);
@@ -117,7 +122,7 @@ export default function HomeScreen() {
     const readNotifications = notifications.map(n => ({...n, read: true}));
     setNotifications(readNotifications);
     setPopoverVisible(false);
-     try {
+    try {
       await AsyncStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(readNotifications));
     } catch (error) {
       console.error("Failed to save notifications to storage", error);
@@ -126,7 +131,6 @@ export default function HomeScreen() {
 
   const togglePopover = () => setPopoverVisible(!isPopoverVisible);
 
-  // --- Renderização ---
   if (isLoading) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}>
@@ -175,7 +179,22 @@ export default function HomeScreen() {
               {filteredSongs.length === 0 ? (
                 <View style={[styles.emptyCard, { backgroundColor: colors.card }]}><Text style={[styles.emptyText, { color: colors.textSecondary }]}>Nenhuma música encontrada</Text></View>
               ) : (
-                filteredSongs.map(song => <SongListItem key={song.id} song={song} colors={colors} onPress={() => navigateToSong(song.id)} />)
+                filteredSongs.map(song => {
+                  const isInQuickAccess = quickAccessSongs.some(s => s.id === song.id);
+                  return (
+                    <SongListItem
+                      key={song.id}
+                      song={song}
+                      colors={colors}
+                      onPress={() => navigateToSong(song.id)}
+                      onAddToQueue={() => addToQuickAccess(song.id)}
+                      onRemoveFromQueue={() => removeFromQuickAccess(song.id)}
+                      onEdit={() => router.push(`/song-form?songId=${song.id}`)}
+                      isInCategoryView={false}
+                      isSongInQueue={isInQuickAccess}
+                    />
+                  );
+                })
               )}
             </View>
           ) : (
@@ -187,7 +206,22 @@ export default function HomeScreen() {
 
               <View style={styles.section}>
                 <Text style={[styles.sectionTitle, { color: colors.text }]}>Músicas Recentes</Text>
-                {recentSongs.map(song => <SongListItem key={song.id} song={song} colors={colors} onPress={() => navigateToSong(song.id)} />)}
+                {recentSongs.map(song => {
+                  const isInQuickAccess = quickAccessSongs.some(s => s.id === song.id);
+                  return (
+                    <SongListItem
+                      key={song.id}
+                      song={song}
+                      colors={colors}
+                      onPress={() => navigateToSong(song.id)}
+                      onAddToQueue={() => addToQuickAccess(song.id)}
+                      onRemoveFromQueue={() => removeFromQuickAccess(song.id)}
+                      onEdit={() => router.push(`/song-form?songId=${song.id}`)}
+                      isInCategoryView={false}
+                      isSongInQueue={isInQuickAccess}
+                    />
+                  );
+                })}
               </View>
             </>
           )}
@@ -201,7 +235,7 @@ export default function HomeScreen() {
   );
 }
 
-// --- Estilos ---
+// --- Estilos (mantive os seus) ---
 const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1 },

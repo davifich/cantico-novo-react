@@ -1,6 +1,6 @@
 
-import { router, Stack } from 'expo-router';
-import React, { useState, useCallback } from 'react';
+import { router, Stack, useLocalSearchParams } from 'expo-router';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,19 +13,33 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import Colors from '@/constants/colors';
-import { useApp } from '@/contexts/AppContext';
-import { AddSongDTO } from '@/types/music'; // Importa o tipo para garantir a conformidade
+import Colors from '../constants/colors';
+import { useApp } from '../contexts/AppContext';
+import { AddSongDTO, UpdateSongDTO } from '../types/music';
 
-export default function CreateSongScreen() {
-  const { isDarkMode, addSong, refreshSongs } = useApp();
+export default function SongFormScreen() {
+  const { isDarkMode, addSong, updateSong, songs } = useApp();
   const colors = isDarkMode ? Colors.dark : Colors.light;
+  const params = useLocalSearchParams();
+
+  const id = params.id ? Number(params.id) : null;
+  const isEditMode = id !== null;
+  const songToEdit = isEditMode ? songs.find(s => s.id === id) : null;
 
   const [title, setTitle] = useState('');
   const [artist, setArtist] = useState('');
   const [letra, setLetra] = useState('');
   const [cifra, setCifra] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (isEditMode && songToEdit) {
+      setTitle(songToEdit.title);
+      setArtist(songToEdit.artist || '');
+      setLetra(songToEdit.letra || '');
+      setCifra(songToEdit.cifra || '');
+    }
+  }, [isEditMode, songToEdit]);
 
   const handleSave = useCallback(async () => {
     if (!title.trim()) {
@@ -36,42 +50,49 @@ export default function CreateSongScreen() {
     setIsSaving(true);
 
     try {
-      // CORREÇÃO: O objeto agora corresponde à interface AddSongDTO
-      const newSong: AddSongDTO = {
-        title: title.trim(),
-        artist: artist.trim(),
-        letra: letra.trim() || null,
-        cifra: cifra.trim() || null,
-        has_cifra: cifra.trim().length > 0, // Determina se há cifra com base no input
-        has_partitura: false, // Criação manual não tem partitura
-        file_path: null,
-        category_ids: [], // Começa sem categorias
-      };
-
-      const newSongId = await addSong(newSong);
-
-      if (typeof newSongId === 'number') {
-        await refreshSongs(); 
-        Alert.alert('Sucesso!', 'A música foi salva.', [
-          {
-            text: 'OK',
-            onPress: () => router.replace(`/song/${newSongId}`),
-          },
+      if (isEditMode && id) {
+        const updatedSong: UpdateSongDTO = {
+          title: title.trim(),
+          artist: artist.trim(),
+          letra: letra.trim() || null,
+          cifra: cifra.trim() || null,
+          has_cifra: cifra.trim().length > 0,
+        };
+        await updateSong(id, updatedSong);
+        Alert.alert('Sucesso!', 'A música foi atualizada.', [
+          { text: 'OK', onPress: () => router.back() },
         ]);
       } else {
-        throw new Error('Não foi possível obter o ID da nova música.');
+        const newSong: AddSongDTO = {
+          title: title.trim(),
+          artist: artist.trim(),
+          letra: letra.trim() || null,
+          cifra: cifra.trim() || null,
+          has_cifra: cifra.trim().length > 0,
+          has_partitura: false,
+          file_path: null,
+          category_ids: [],
+        };
+        const newSongId = await addSong(newSong);
+        if (typeof newSongId === 'number') {
+          Alert.alert('Sucesso!', 'A música foi criada.', [
+            { text: 'OK', onPress: () => router.replace(`/song/${newSongId}`) },
+          ]);
+        } else {
+          throw new Error('Não foi possível obter o ID da nova música.');
+        }
       }
     } catch (error) {
       console.error('Error saving song:', error);
-      Alert.alert('Erro', 'Ocorreu um problema ao salvar a música. Tente novamente.');
+      Alert.alert('Erro', `Ocorreu um problema ao salvar a música. Tente novamente.`);
     } finally {
       setIsSaving(false);
     }
-  }, [title, artist, letra, cifra, addSong, refreshSongs]);
+  }, [id, title, artist, letra, cifra, addSong, updateSong, isEditMode, router]);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['bottom']}>
-      <Stack.Screen options={{ title: 'Criar Nova Música' }} />
+      <Stack.Screen options={{ title: isEditMode ? 'Editar Música' : 'Criar Nova Música' }} />
       <ScrollView style={styles.scrollContainer} contentContainerStyle={styles.scrollContent}>
         <View style={styles.formGroup}>
           <Text style={[styles.label, { color: colors.text }]}>Título *</Text>
@@ -139,7 +160,9 @@ export default function CreateSongScreen() {
           {isSaving ? (
             <ActivityIndicator color={colors.secondary} />
           ) : (
-            <Text style={[styles.saveButtonText, { color: colors.secondary }]}>Salvar Música</Text>
+            <Text style={[styles.saveButtonText, { color: colors.secondary }]}>
+              {isEditMode ? 'Salvar Alterações' : 'Salvar Música'}
+            </Text>
           )}
         </TouchableOpacity>
       </View>

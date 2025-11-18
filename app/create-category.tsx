@@ -133,7 +133,7 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   selectedColor: {
-    borderColor: 'white', // Idealmente, uma cor do tema
+    borderColor: 'white',
   },
   footer: {
     padding: 20,

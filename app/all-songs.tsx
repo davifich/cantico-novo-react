@@ -1,103 +1,79 @@
 
-import { router } from 'expo-router';
-import React, { useMemo, useCallback } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  StatusBar,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { FlashList } from '@shopify/flash-list';
+import { useRouter } from 'expo-router';
+import React, { useCallback, useMemo } from 'react';
+import { StyleSheet, Text } from 'react-native';
 
-import SongListItem from '@/components/SongListItem';
-import Colors from '@/constants/colors';
-import { useApp } from '@/contexts/AppContext';
-import { Music } from '@/types/music';
-
-interface GroupedSongs {
-  [groupKey: string]: Music[];
-}
+import SongListItem from '../components/SongListItem';
+import { ThemedView } from '../components/themed-view';
+import Colors from '../constants/colors';
+import { useApp } from '../contexts/AppContext';
+import { Music } from '../types/music';
 
 export default function AllSongsScreen() {
-  const { isDarkMode, songs } = useApp();
+  const { songs, quickAccessSongs, addToQuickAccess, removeFromQuickAccess, isDarkMode } = useApp();
   const colors = isDarkMode ? Colors.dark : Colors.light;
+  const router = useRouter();
 
-  // Lógica de agrupamento e ordenação priorizando o campo 'code'
-  const groupedSongs = useMemo(() => {
-    // Primeiro, ordena todas as músicas
-    const sortedSongs = [...songs].sort((a, b) => {
-      if (a.code && b.code) {
-        return a.code.localeCompare(b.code); // Ordena pelo código se ambos existirem
-      }
-      if (a.code) return -1; // Músicas com código vêm primeiro
-      if (b.code) return 1; // Músicas sem código vêm depois
-      return a.title.localeCompare(b.title); // Ordena pelo título como fallback
-    });
+  // Create a Set of song IDs in the queue for quick lookup
+  const songsInQueue = useMemo(() => new Set(quickAccessSongs.map(s => s.id)), [quickAccessSongs]);
 
-    // Depois, agrupa as músicas ordenadas
-    return sortedSongs.reduce((acc, song) => {
-      // Usa o 'code' para agrupar. Se não houver, usa a primeira letra do título.
-      const groupKey = song.code ? song.code.charAt(0).toUpperCase() : '#';
-      
-      if (!acc[groupKey]) {
-        acc[groupKey] = [];
-      }
-      acc[groupKey].push(song);
-      return acc;
-    }, {} as GroupedSongs);
-  }, [songs]);
+  const handleAddToQueue = useCallback(
+    (songId: number) => {
+      addToQuickAccess(songId);
+    },
+    [addToQuickAccess]
+  );
 
-  const navigateToSong = useCallback((id: string) => {
-    router.push(`/song/${id}`);
-  }, []);
+  const handleRemoveFromQueue = useCallback(
+    (songId: number) => {
+      removeFromQuickAccess(songId);
+    },
+    [removeFromQuickAccess]
+  );
 
-  // Ordena as chaves do grupo (letras e '#')
-  const sortedGroupKeys = Object.keys(groupedSongs).sort((a, b) => {
-    if (a === '#') return 1; // Mantém '#' no final
-    if (b === '#') return -1;
-    return a.localeCompare(b);
-  });
+  const handleEdit = useCallback(
+    (song: Music) => {
+      router.push(`/song-form?songId=${song.id}`);
+    },
+    [router]
+  );
+
+  const renderItem = useCallback(
+    ({ item }: { item: Music }) => {
+      const isSongInQueue = songsInQueue.has(item.id);
+      return (
+        <SongListItem
+          song={item}
+          colors={colors}
+          onPress={() => router.push(`/song/${item.id}`)}
+          onAddToQueue={() => handleAddToQueue(item.id)}
+          onRemoveFromQueue={() => handleRemoveFromQueue(item.id)}
+          onEdit={() => handleEdit(item)}
+          isSongInQueue={isSongInQueue} // Pass the correct state
+        />
+      );
+    },
+    [colors, router, handleAddToQueue, handleRemoveFromQueue, handleEdit, songsInQueue]
+  );
+
+  const memoizedList = useMemo(
+    () => (
+      <FlashList
+        data={songs}
+        renderItem={renderItem}
+        keyExtractor={(item) => item.id.toString()}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16 }}
+      />
+    ),
+    [songs, renderItem]
+  );
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.header}>
-          <Text style={[styles.title, { color: colors.text }]}>Todas as Músicas</Text>
-        </View>
-
-        {songs.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-              Nenhuma música encontrada.
-            </Text>
-            <Text style={[styles.emptySubText, { color: colors.textSecondary }]}>
-              Importe ou crie novas músicas para começar.
-            </Text>
-          </View>
-        ) : (
-          <ScrollView>
-            {sortedGroupKeys.map((key) => (
-              <View key={key} style={styles.section}>
-                <View style={[styles.letterHeader, { backgroundColor: colors.primary }]}>
-                  <Text style={[styles.letterText, { color: colors.secondary }]}>{key}</Text>
-                </View>
-                {groupedSongs[key].map((song) => (
-                  <SongListItem
-                    key={song.id}
-                    song={song}
-                    colors={colors}
-                    onPress={() => navigateToSong(song.id.toString())}
-                  />
-                ))}
-              </View>
-            ))}
-          </ScrollView>
-        )}
-      </SafeAreaView>
-    </View>
+    <ThemedView style={styles.container}>
+      <Text style={[styles.title, { color: colors.text }]}>Todas as Músicas</Text>
+      {memoizedList}
+    </ThemedView>
   );
 }
 
@@ -105,44 +81,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  safeArea: {
-    flex: 1,
-  },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: 24,
-    paddingBottom: 16,
-  },
   title: {
-    fontSize: 28,
-    fontWeight: '700',
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  emptySubText: {
-    fontSize: 14,
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  section: {
-    marginBottom: 16,
-  },
-  letterHeader: {
-    paddingHorizontal: 20,
-    paddingVertical: 4,
-    opacity: 0.9,
-  },
-  letterText: {
-    fontSize: 16,
+    fontSize: 24,
     fontWeight: 'bold',
+    margin: 16,
   },
 });

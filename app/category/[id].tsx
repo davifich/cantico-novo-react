@@ -1,5 +1,4 @@
-
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, StatusBar, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -8,31 +7,55 @@ import { ChevronLeft } from 'lucide-react-native';
 import SongListItem from '@/components/SongListItem';
 import Colors from '@/constants/colors';
 import { useApp } from '@/contexts/AppContext';
+import { Music } from '@/types/music';
 
 export default function CategoryDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { isDarkMode, songs, categories } = useApp();
+  const router = useRouter();
+
+  // usa o hook que você forneceu no AppContext
+  const { isDarkMode, songs, categories, addToQuickAccess, removeFromQuickAccess, quickAccessSongs } = useApp();
   const colors = isDarkMode ? Colors.dark : Colors.light;
 
   const categoryId = Number(id);
 
-  // Encontra a categoria atual com base no ID da rota
-  const currentCategory = useMemo(() => 
-    categories.find(c => c.id === categoryId)
-  , [categories, categoryId]);
+  const currentCategory = useMemo(
+    () => categories.find((c) => c.id === categoryId),
+    [categories, categoryId]
+  );
 
-  // Filtra as músicas que pertencem à categoria atual
-  const songsInCategory = useMemo(() => 
-    songs.filter(song => song.category_ids.includes(categoryId))
-  , [songs, categoryId]);
+  // usa category_ids (array) conforme seu tipo Music
+  const songsInCategory = useMemo(
+    () => songs.filter((song) => Array.isArray(song.category_ids) && song.category_ids.includes(categoryId)),
+    [songs, categoryId]
+  );
 
-  const navigateToSong = useCallback((songId: number) => {
-    router.push(`/song/${songId}`);
-  }, []);
+  const handleAddToQuickAccess = useCallback(
+    (song: Music) => {
+      // seu AppContext tem addToQuickAccess(songId: number)
+      // se o addToQuickAccess for async, não precisa await aqui — tratar erros no contexto
+      addToQuickAccess(song.id);
+    },
+    [addToQuickAccess]
+  );
+
+  const handleRemoveFromQuickAccess = useCallback(
+    (song: Music) => {
+      removeFromQuickAccess(song.id);
+    },
+    [removeFromQuickAccess]
+  );
+
+  const handleEdit = useCallback(
+    (song: Music) => {
+      router.push(`/song-form?songId=${song.id}`);
+    },
+    [router]
+  );
 
   const goBack = useCallback(() => {
     router.back();
-  }, []);
+  }, [router]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -55,15 +78,23 @@ export default function CategoryDetailScreen() {
           </View>
         ) : (
           <ScrollView style={styles.scrollView}>
-            {songsInCategory.map((song) => (
-              <SongListItem
-                key={song.id}
-                song={song}
-                colors={colors}
-                onPress={() => navigateToSong(song.id)}
-                isInCategoryView={true}
-              />
-            ))}
+            {songsInCategory.map((song) => {
+              const isInQuickAccess = quickAccessSongs.some((s) => s.id === song.id);
+
+              return (
+                <SongListItem
+                  key={song.id}
+                  song={song}
+                  colors={colors}
+                  onPress={() => router.push(`/song/${song.id}`)}
+                  onAddToQueue={() => handleAddToQuickAccess(song)}       // mapeado para quick access
+                  onRemoveFromQueue={() => handleRemoveFromQuickAccess(song)}
+                  onEdit={() => handleEdit(song)}
+                  isInCategoryView={true}
+                  isSongInQueue={isInQuickAccess} // alimenta o estado do botão/popover
+                />
+              );
+            })}
           </ScrollView>
         )}
       </SafeAreaView>

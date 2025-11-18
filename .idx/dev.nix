@@ -38,10 +38,6 @@
     previews = {
       enable = true;
       previews = {
-        web = {
-          command = [ "npm" "run" "web" "--" "--port" "$PORT" ];
-          manager = "web";
-        };
         android = {
           # noop
           command = [ "tail" "-f" "/dev/null" ];

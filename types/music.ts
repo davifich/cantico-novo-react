@@ -1,6 +1,3 @@
-
-// @/types/music.ts
-
 import { z } from "zod";
 
 /**
@@ -70,4 +67,18 @@ export interface AddSongDTO {
   category_ids?: number[]; // IDs das categorias para associar à música
   has_cifra: boolean;      // Flag indicando se a música tem cifras
   has_partitura: boolean;  // Flag indicando se a música tem partitura em PDF
+}
+
+/**
+ * DTO (Data Transfer Object) para atualizar uma música existente.
+ * Todos os campos são opcionais, permitindo a atualização parcial.
+ */
+export interface UpdateSongDTO {
+    title?: string;
+    artist?: string;
+    letra?: string | null;
+    cifra?: string | null;
+    category_ids?: number[];
+    has_cifra?: boolean;
+    has_partitura?: boolean;
 }

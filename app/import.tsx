@@ -18,10 +18,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 
-import FloatingNavMenu from '@/components/FloatingNavMenu';
-import ImportCard from '@/components/ImportCard';
-import Colors from '@/constants/colors';
-import { useApp } from '@/contexts/AppContext';
+import FloatingNavMenu from '../components/FloatingNavMenu';
+import ImportCard from '../components/ImportCard';
+import Colors from '../constants/colors';
+import { useApp } from '../contexts/AppContext';
 
 export default function ImportScreen() {
   const { isDarkMode } = useApp();
@@ -63,7 +63,7 @@ export default function ImportScreen() {
 
   const handleCreateNew = useCallback(() => {
     if (isProcessing) return;
-    router.push('/create-song');
+    router.push('/song-form');
   }, [isProcessing]);
 
   return (
