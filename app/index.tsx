@@ -1,7 +1,8 @@
+
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { Search, ListMusic, FolderTree, Bell } from 'lucide-react-native';
-import React, { useState, useCallback, memo, useEffect } from 'react';
+import React, { useState, useCallback, memo, useEffect, lazy, Suspense } from 'react';
 import {
   View,
   Text,
@@ -15,11 +16,13 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import FloatingNavMenu from '@/components/FloatingNavMenu';
-import NotificationPopover, { Notification } from '@/components/NotificationPopover';
-import SongListItem from '@/components/SongListItem';
-import Colors from '@/constants/colors';
-import { useApp } from '@/contexts/AppContext';
+import type { Notification } from '../components/NotificationPopover';
+import SongListItem from '../components/SongListItem';
+import Colors from '../constants/colors';
+import { useApp } from '../contexts/AppContext';
+
+const NotificationPopover = lazy(() => import('../components/NotificationPopover'));
+const FloatingNavMenu = lazy(() => import('../components/FloatingNavMenu'));
 
 // --- Componente de Cartão para Ação Rápida ---
 const QuickActionCard = memo(({
@@ -67,9 +70,9 @@ export default function HomeScreen() {
     searchQuery,
     setSearchQuery,
     isLoading,
-    addToQuickAccess,       // <-- precisa existir no AppContext
-    removeFromQuickAccess,  // <-- precisa existir no AppContext
-    quickAccessSongs        // <-- precisa existir no AppContext
+    addToQuickAccess,
+    removeFromQuickAccess,
+    quickAccessSongs
   } = useApp();
 
   const [localSearch, setLocalSearch] = useState(searchQuery);
@@ -227,15 +230,26 @@ export default function HomeScreen() {
           )}
         </ScrollView>
         
-        <FloatingNavMenu />
+        <Suspense fallback={null}>
+          <FloatingNavMenu />
+        </Suspense>
 
-        {isPopoverVisible && <NotificationPopover notifications={notifications} onClose={() => setPopoverVisible(false)} onClear={handleClearNotification} onClearAll={handleClearAllNotifications} />}
+        {isPopoverVisible && (
+          <Suspense fallback={null}>
+            <NotificationPopover 
+              notifications={notifications} 
+              onClose={() => setPopoverVisible(false)} 
+              onClear={handleClearNotification} 
+              onClearAll={handleClearAllNotifications} 
+            />
+          </Suspense>
+        )}
       </SafeAreaView>
     </View>
   );
 }
 
-// --- Estilos (mantive os seus) ---
+// --- Estilos ---
 const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1 },

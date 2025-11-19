@@ -5,10 +5,10 @@ import React, { useEffect, useState } from "react";
 import { StyleSheet, View, Text } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
-import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { AppProvider } from "@/contexts/AppContext";
-import { trpc, trpcClient } from "@/lib/trpc";
-import { initDatabase } from "@/lib/database";
+import { ErrorBoundary } from "../components/ErrorBoundary";
+import { AppProvider } from "../contexts/AppContext";
+import { trpc, trpcClient } from "../lib/trpc";
+import { initDatabase } from "../lib/database";
 
 SplashScreen.preventAutoHideAsync();
 

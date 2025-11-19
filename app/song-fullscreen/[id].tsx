@@ -1,18 +1,19 @@
 
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useMemo, useState, useCallback, useEffect, lazy, Suspense } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar, ActivityIndicator, Dimensions } from 'react-native';
+import React, { useMemo, useState, useCallback, useEffect, lazy, Suspense, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, StatusBar, ActivityIndicator, Dimensions } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { WebView } from 'react-native-webview';
+import * as ScreenOrientation from 'expo-screen-orientation';
 
 import Colors from '../../constants/colors';
 import { useApp } from '../../contexts/AppContext';
-import { getPreference, setPreference } from '../../lib/database';
+import { getPreference } from '../../lib/database';
 import { Music } from '../../types/music';
 
 // Lazy load components
 const CifraViewer = lazy(() => import('../../components/CifraViewer'));
-const FloatingFuncMenu = lazy(() => import('../../components/FloatingFuncMenu'));
+const SideBarMenu = lazy(() => import('../../components/SideBarMenu'));
 
 const ZOOM_LEVELS = [1, 1.15, 1.3, 1.45, 1.6] as const;
 
@@ -33,9 +34,9 @@ const renderFormattedLyrics = (text: string, style: any) => {
   });
 };
 
-// --- Main Screen Component ---
-export default function SongScreen() {
-  const { id: idString } = useLocalSearchParams<{ id: string }>();
+// --- Fullscreen Screen Component ---
+export default function SongFullscreen() {
+  const { id: idString, viewMode: initialViewMode } = useLocalSearchParams<{ id: string, viewMode: ViewMode }>();
   const id = useMemo(() => (idString ? parseInt(idString, 10) : NaN), [idString]);
   const router = useRouter();
 
@@ -43,45 +44,62 @@ export default function SongScreen() {
   const colors = useMemo(() => (isDarkMode ? Colors.dark : Colors.light), [isDarkMode]);
 
   const [song, setSong] = useState<Music | undefined>(undefined);
-  const [viewMode, setViewMode] = useState<ViewMode>('letra');
+  const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode || 'letra');
   const [zoomLevel, setZoomLevel] = useState(1);
+  const [autoScroll, setAutoScroll] = useState({ isScrolling: false, speed: 5 }); // Default speed
+  
+  const scrollRef = useRef<ScrollView>(null);
+  const scrollPosition = useRef(0);
+  const animationFrame = useRef<number | null>(null);
 
   // --- Effects ---
   useEffect(() => {
+    ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE_RIGHT);
     const currentSong = songs.find((s) => s.id === id);
     setSong(currentSong);
-    if (currentSong) {
-      getPreference(`song_${currentSong.id}_viewMode`).then(mode => {
-        if ((mode === 'cifra' && !currentSong.has_cifra) || (mode === 'partitura' && !currentSong.has_partitura)) {
-          setViewMode('letra');
-        } else {
-          setViewMode(mode as ViewMode || (currentSong.letra ? 'letra' : currentSong.has_cifra ? 'cifra' : 'partitura'));
-        }
-      });
-    }
+
+    return () => { ScreenOrientation.unlockAsync(); };
   }, [songs, id]);
 
-  // --- Handlers ---
-  const handleSelectMode = useCallback((mode: ViewMode) => {
-    setViewMode(mode);
-    if (song) setPreference(`song_${song.id}_viewMode`, mode);
-  }, [song]);
+  useEffect(() => {
+    const scroll = () => {
+      scrollPosition.current += autoScroll.speed / 10; // Adjusted speed calculation
+      scrollRef.current?.scrollTo({ y: scrollPosition.current, animated: false });
+      animationFrame.current = requestAnimationFrame(scroll);
+    };
 
+    if (autoScroll.isScrolling) {
+      animationFrame.current = requestAnimationFrame(scroll);
+    } else if (animationFrame.current) {
+      cancelAnimationFrame(animationFrame.current);
+      animationFrame.current = null;
+    }
+
+    return () => { if (animationFrame.current) cancelAnimationFrame(animationFrame.current); };
+  }, [autoScroll]);
+
+  // --- Handlers ---
   const handleZoomIn = useCallback(() => setZoomLevel(z => Math.min(z + 1, ZOOM_LEVELS.length - 1)), []);
   const handleZoomOut = useCallback(() => setZoomLevel(z => Math.max(z - 1, 0)), []);
-  const handleEdit = useCallback(() => {
-    if(song) router.push(`/song-form?songId=${song.id}`);
-  }, [router, song]);
-  
-  const handleGoToFullscreen = useCallback(() => {
-    if (song) router.push(`/song-fullscreen/${song.id}?viewMode=${viewMode}`);
-  }, [router, song, viewMode]);
+  const handleExitFullscreen = useCallback(() => { router.back(); }, [router]);
 
-  // --- Memoized Values ---
-  const displayTitle = useMemo(() => song ? (song.code ? `${song.code} - ${song.title}` : song.title) : 'Carregando...', [song]);
+  const handleToggleAutoScroll = useCallback(() => {
+    setAutoScroll(prev => {
+      if (prev.isScrolling) {
+        scrollPosition.current = 0;
+        scrollRef.current?.scrollTo({ y: 0, animated: false });
+      }
+      return { ...prev, isScrolling: !prev.isScrolling };
+    });
+  }, []);
+
+  const handleChangeScrollSpeed = useCallback((newSpeed: number) => {
+    setAutoScroll({ speed: newSpeed, isScrolling: true });
+  }, []);
 
   // --- Render Logic ---
   const renderContent = () => {
+    const contentProps = { ref: scrollRef, contentContainerStyle: styles.scrollContent };
     if (!song) return null;
     if (viewMode === 'partitura' && song.has_partitura && song.file_path) {
       return <WebView source={{ uri: song.file_path }} style={styles.pdf} />;
@@ -89,14 +107,13 @@ export default function SongScreen() {
     if (viewMode === 'cifra' && song.has_cifra && song.cifra) {
       return (
         <Suspense fallback={<ActivityIndicator color={colors.primary} style={{ marginTop: 20}} />}>
-          <ScrollView contentContainerStyle={styles.scrollContent}><CifraViewer content={song.cifra} zoomFactor={ZOOM_LEVELS[zoomLevel]} /></ScrollView>
+          <ScrollView {...contentProps}><CifraViewer content={song.cifra} zoomFactor={ZOOM_LEVELS[zoomLevel]} /></ScrollView>
         </Suspense>
       );
     }
     if (song.letra) {
       return (
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          {song.artist && <Text style={[styles.artist, { color: colors.textSecondary }]}>{song.artist}</Text>}
+        <ScrollView {...contentProps}>
           {renderFormattedLyrics(song.letra, [styles.lyrics, { color: colors.text, fontSize: 16 * ZOOM_LEVELS[zoomLevel] }])}
         </ScrollView>
       );
@@ -110,46 +127,31 @@ export default function SongScreen() {
     return (
       <View style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}>
         <ActivityIndicator color={colors.primary} />
-        <Text style={{ color: colors.text, marginTop: 10 }}>Carregando música...</Text>
       </View>
     );
   }
 
-  const availableModes = ['letra', song.has_cifra && 'cifra', song.has_partitura && 'partitura'].filter(Boolean) as ViewMode[];
-  const floatingMenuProps = {
+  const sideBarMenuProps = {
     viewMode,
     onZoomIn: handleZoomIn,
     onZoomOut: handleZoomOut,
     zoomLevel,
     maxZoomLevel: ZOOM_LEVELS.length - 1,
-    onEdit: handleEdit,
-    onToggleFullscreen: handleGoToFullscreen,
-    isFullscreen: false, // Always false in this screen
-    hasCifra: song.has_cifra,
-    hasPartitura: song.has_partitura,
+    onToggleFullscreen: handleExitFullscreen,
+    autoScroll,
+    onToggleAutoScroll: handleToggleAutoScroll,
+    onChangeScrollSpeed: handleChangeScrollSpeed,
   };
 
   return (
     <GestureHandlerRootView style={[styles.container, { backgroundColor: colors.background }]}>
-      <Stack.Screen options={{ title: displayTitle }} />
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-
-      <View style={[styles.topBar, { borderBottomColor: colors.border }]}>
-        {availableModes.length > 1 && (
-          <View style={[styles.modeSelector, { backgroundColor: colors.surface }]}>
-            {availableModes.map(mode => (
-              <TouchableOpacity key={mode} style={[styles.modeButton, viewMode === mode && { backgroundColor: colors.primary }]} onPress={() => handleSelectMode(mode)}>
-                <Text style={[styles.modeButtonText, { color: viewMode === mode ? 'white' : colors.text }]}>{mode.charAt(0).toUpperCase() + mode.slice(1)}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-      </View>
+      <Stack.Screen options={{ headerShown: false }} />
+      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} hidden />
 
       <View style={styles.contentContainer}>{renderContent()}</View>
 
       <Suspense fallback={null}>
-        <FloatingFuncMenu {...floatingMenuProps} />
+        <SideBarMenu {...sideBarMenuProps} />
       </Suspense>
     </GestureHandlerRootView>
   );
@@ -158,14 +160,9 @@ export default function SongScreen() {
 // --- Styles ---
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  topBar: { paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap', gap: 16 },
-  modeSelector: { flexDirection: 'row', borderRadius: 8, overflow: 'hidden', flexShrink: 1 },
-  modeButton: { paddingHorizontal: 16, paddingVertical: 8 },
-  modeButtonText: { fontWeight: 'bold', fontSize: 14 },
   contentContainer: { flex: 1 },
   scrollContent: { padding: 20, paddingBottom: 150 },
   pdf: { flex: 1, width: Dimensions.get('window').width, height: Dimensions.get('window').height },
-  artist: { fontSize: 16, fontWeight: '600', marginBottom: 20 },
   lyrics: { lineHeight: 28, fontWeight: '500' },
   emptyCard: { padding: 32, borderRadius: 12, alignItems: 'center', marginTop: 40, marginHorizontal: 20 },
   emptyText: { fontSize: 15, fontWeight: '500', textAlign: 'center' },

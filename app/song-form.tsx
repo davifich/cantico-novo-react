@@ -22,7 +22,7 @@ export default function SongFormScreen() {
   const colors = isDarkMode ? Colors.dark : Colors.light;
   const params = useLocalSearchParams();
 
-  const id = params.id ? Number(params.id) : null;
+  const id = params.songId ? Number(params.songId) : null;
   const isEditMode = id !== null;
   const songToEdit = isEditMode ? songs.find(s => s.id === id) : null;
 
@@ -57,6 +57,7 @@ export default function SongFormScreen() {
           letra: letra.trim() || null,
           cifra: cifra.trim() || null,
           has_cifra: cifra.trim().length > 0,
+          has_partitura: false, // Adicionado para corrigir o erro de NOT NULL
         };
         await updateSong(id, updatedSong);
         Alert.alert('Sucesso!', 'A música foi atualizada.', [

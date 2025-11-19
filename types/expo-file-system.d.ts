@@ -38,5 +38,9 @@
   
     export const documentDirectory: string;
     export const cacheDirectory: string;
+
+    export function copyAsync(arg0: { from: string; to: string; }) {
+      throw new Error('Function not implemented.');
+    }
   }
   

@@ -1,16 +1,18 @@
-const { getDefaultConfig } = require('expo/metro-config');
+const { getDefaultConfig: getExpoDefaultConfig } = require('expo/metro-config');
+const { mergeConfig } = require('metro-config');
+const { getDefaultConfig } = require('@react-native/metro-config');
 
-/** @type {import('expo/metro-config').MetroConfig} */
-const config = getDefaultConfig(__dirname);
+// Get the default Expo configuration
+const expoConfig = getExpoDefaultConfig(__dirname);
 
-// Adiciona as extensões .db e .wasm à lista de assets
-config.resolver.assetExts.push('db', 'wasm');
+// Add custom asset extensions
+expoConfig.resolver.assetExts.push('db', 'wasm');
 
-// Desabilita package exports que causam o erro de require
-config.resolver.unstable_enablePackageExports = false;
+// Disable package exports
+expoConfig.resolver.unstable_enablePackageExports = false;
 
-// Configura polyfills necessários
-config.resolver.extraNodeModules = {
+// Add polyfills
+expoConfig.resolver.extraNodeModules = {
   crypto: require.resolve('crypto-browserify'),
   stream: require.resolve('readable-stream'),
   buffer: require.resolve('@craftzdog/react-native-buffer'),
@@ -24,24 +26,27 @@ config.resolver.extraNodeModules = {
   zlib: require.resolve('browserify-zlib'),
   net: require.resolve('react-native-tcp-socket'),
   tls: require.resolve('react-native-tcp-socket'),
-
-  // 🔧 Corrige erro do Metro com 'copy-anything'
   'copy-anything': require.resolve('copy-anything'),
 };
 
-
-// Configurações de transformação
-config.transformer.getTransformOptions = async () => ({
+// Transformer configuration
+expoConfig.transformer.getTransformOptions = async () => ({
   transform: {
     experimentalImportSupport: false,
     inlineRequires: true,
   },
 });
 
-// Ignora arquivos do backend no bundle do frontend
-config.resolver.blockList = [
+// Block backend files
+expoConfig.resolver.blockList = [
   /backend\/.*/,
   /node_modules\/.*\/node_modules\/react-native\/.*/,
 ];
 
-module.exports = config;
+// Get the default React Native configuration
+const defaultConfig = getDefaultConfig(__dirname);
+
+// Merge the configurations
+const mergedConfig = mergeConfig(defaultConfig, expoConfig);
+
+module.exports = mergedConfig;
