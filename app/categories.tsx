@@ -1,8 +1,8 @@
 
 import { router } from 'expo-router';
-import { FolderOpen } from 'lucide-react-native';
+import { FolderOpen, DiamondPlus as Plus, Trash2 } from 'lucide-react-native';
 import React, { useMemo, useCallback, memo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import Colors from '@/constants/colors';
@@ -10,28 +10,38 @@ import { useApp } from '@/contexts/AppContext';
 import { Category } from '@/types/music';
 
 const CategoryCard = memo((
-  { category, songCount, colors, onPress }: 
-  { category: Category; songCount: number; colors: typeof Colors.light; onPress: () => void; }
-) => (
-  <TouchableOpacity
-    style={[styles.categoryCard, { backgroundColor: colors.card }]}
-    onPress={onPress}
-  >
-    <View style={[styles.iconContainer, { backgroundColor: category.color || colors.primary }]}>
-      <FolderOpen size={28} color="#ffffff" />
-    </View>
-    <View style={styles.categoryInfo}>
-      <Text style={[styles.categoryName, { color: colors.text }]}>{category.name}</Text>
-      <Text style={[styles.songCount, { color: colors.textSecondary }]}>
-        {songCount} {songCount === 1 ? 'música' : 'músicas'}
-      </Text>
-    </View>
-  </TouchableOpacity>
-));
+  { category, songCount, colors, onPress, onDelete }: 
+  { category: Category; songCount: number; colors: typeof Colors.light; onPress: () => void; onDelete: () => void; }
+) => {
+  // A regra: categorias com ID maior que 10 são consideradas criadas pelo usuário e podem ser apagadas.
+  const isDeletable = category.id > 10;
+
+  return (
+    <TouchableOpacity
+      style={[styles.categoryCard, { backgroundColor: colors.card }]}
+      onPress={onPress}
+    >
+      <View style={[styles.iconContainer, { backgroundColor: category.color || colors.primary }]}>
+        <FolderOpen size={28} color="#ffffff" />
+      </View>
+      <View style={styles.categoryInfo}>
+        <Text style={[styles.categoryName, { color: colors.text }]}>{category.name}</Text>
+        <Text style={[styles.songCount, { color: colors.textSecondary }]}>
+          {songCount} {songCount === 1 ? 'música' : 'músicas'}
+        </Text>
+      </View>
+      {isDeletable && (
+        <TouchableOpacity style={styles.deleteButton} onPress={onDelete}>
+          <Trash2 size={22} color={colors.textLight} />
+        </TouchableOpacity>
+      )}
+    </TouchableOpacity>
+  );
+});
 CategoryCard.displayName = 'CategoryCard';
 
 export default function CategoriesScreen() {
-  const { isDarkMode, categories, songs } = useApp();
+  const { isDarkMode, categories, songs, deleteCategory } = useApp();
   const colors = isDarkMode ? Colors.dark : Colors.light;
 
   const categoryCounts = useMemo(() => {
@@ -48,12 +58,34 @@ export default function CategoriesScreen() {
     router.push(`/category/${categoryId}`);
   }, []);
 
+  const navigateToCreateCategory = useCallback(() => {
+    router.push('/create-category');
+  }, []);
+
+  const handleDeleteCategory = useCallback((categoryId: number, categoryName: string) => {
+    Alert.alert(
+      `Apagar "${categoryName}"?`,
+      "As músicas desta categoria não serão apagadas, mas ficarão sem categoria. Esta ação não pode ser desfeita.",
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { 
+          text: 'Apagar', 
+          style: 'destructive', 
+          onPress: () => deleteCategory(categoryId) 
+        },
+      ]
+    );
+  }, [deleteCategory]);
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.header}>
           <Text style={[styles.title, { color: colors.text }]}>Categorias</Text>
+          <TouchableOpacity style={styles.addButton} onPress={navigateToCreateCategory}>
+            <Plus size={28} color={colors.primary} />
+          </TouchableOpacity>
         </View>
 
         {categories.length === 0 ? (
@@ -61,9 +93,11 @@ export default function CategoriesScreen() {
             <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
               Nenhuma categoria encontrada.
             </Text>
-            <Text style={[styles.emptySubText, { color: colors.textSecondary }]}>
-              Crie categorias para organizar suas músicas.
-            </Text>
+            <TouchableOpacity onPress={navigateToCreateCategory}>
+              <Text style={[styles.createText, { color: colors.primary }]}>
+                Criar a primeira categoria
+              </Text>
+            </TouchableOpacity>
           </View>
         ) : (
           <ScrollView
@@ -78,6 +112,7 @@ export default function CategoriesScreen() {
                 songCount={categoryCounts[category.id] || 0}
                 colors={colors}
                 onPress={() => navigateToCategory(category.id)}
+                onDelete={() => handleDeleteCategory(category.id, category.name)}
               />
             ))}
           </ScrollView>
@@ -95,6 +130,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 20,
     paddingTop: 24,
     paddingBottom: 16,
@@ -102,6 +140,9 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '700',
+  },
+  addButton: {
+    padding: 8,
   },
   content: {
     flex: 1,
@@ -121,10 +162,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
   },
-  emptySubText: {
-    fontSize: 14,
-    marginTop: 8,
-    textAlign: 'center',
+  createText: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginTop: 16,
   },
   categoryCard: {
     flexDirection: 'row',
@@ -157,5 +198,9 @@ const styles = StyleSheet.create({
   songCount: {
     fontSize: 14,
     fontWeight: '500',
+  },
+  deleteButton: {
+    padding: 8, 
+    marginLeft: 12, 
   },
 });

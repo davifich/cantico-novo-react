@@ -1,3 +1,4 @@
+
 import { z } from "zod";
 
 /**
@@ -38,7 +39,7 @@ export interface Music {
   title: string;
   artist?: string;
   status?: 'synced' | 'pending' | 'error';
-  code?: string; // Novo campo para o código alfanumérico
+  code?: string; // Código alfanumérico da música
 
   // O conteúdo principal da música
   letra: string | null;
@@ -48,9 +49,19 @@ export interface Music {
   // Flags para controle de UI
   has_cifra: boolean;
   has_partitura: boolean;
+  
+  // Metadados
+  last_played: number | null; // Timestamp da última vez que a música foi tocada
 
   // Relacionamento com Categorias
   category_ids: number[]; // Array de IDs das categorias associadas
+
+  // --- NOVOS CAMPOS PARA O KARAOKÊ ---
+  is_karaoke: boolean;      // Flag para identificar facilmente
+  audio_uri: string | null;   // Caminho LOCAL para o arquivo de áudio
+  bpm: number | null;         // BPM da transcrição
+  lyrics_karaoke: any | null; // A estrutura da letra com timestamps
+
 }
 
 /**
@@ -60,13 +71,19 @@ export interface Music {
 export interface AddSongDTO {
   title: string;
   artist?: string;
-  code?: string; // Novo campo para o código alfanumérico
+  code?: string; 
   letra: string | null;
   cifra: string | null;
   file_path?: string | null;
-  category_ids?: number[]; // IDs das categorias para associar à música
-  has_cifra: boolean;      // Flag indicando se a música tem cifras
-  has_partitura: boolean;  // Flag indicando se a música tem partitura em PDF
+  category_ids?: number[]; 
+  has_cifra: boolean;      
+  has_partitura: boolean;  
+
+  // Campos de Karaokê
+  is_karaoke?: boolean;
+  audio_uri?: string | null;
+  bpm?: number | null;
+  lyrics_karaoke?: any | null;
 }
 
 /**
@@ -76,9 +93,17 @@ export interface AddSongDTO {
 export interface UpdateSongDTO {
     title?: string;
     artist?: string;
+    code?: string; 
     letra?: string | null;
     cifra?: string | null;
     category_ids?: number[];
     has_cifra?: boolean;
     has_partitura?: boolean;
+    last_played?: number | null;
+
+    // Campos de Karaokê
+    is_karaoke?: boolean;
+    audio_uri?: string | null;
+    bpm?: number | null;
+    lyrics_karaoke?: any | null;
 }

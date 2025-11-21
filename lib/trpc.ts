@@ -3,7 +3,7 @@ import { httpBatchLink } from "@trpc/client";
 import superjson from "superjson";
 import { Platform } from "react-native";
 import type { AppRouter } from "../backend/trpc/app-router";
-import { supabase } from './supabase';
+import { supabase } from "./supabase";
 
 export const trpc = createTRPCReact<AppRouter>();
 
@@ -21,17 +21,16 @@ export const trpcClient = trpc.createClient({
   links: [
     httpBatchLink({
       url: `${getBaseUrl()}/api/trpc`,
-      transformer: superjson,
       async headers() {
-        try {
-          const { data: { session } } = await supabase.auth.getSession();
-          return {
-            authorization: session?.access_token ? `Bearer ${session.access_token}` : '',
-          };
-        } catch (error) {
-          console.warn('[tRPC] Erro ao obter token de autenticação:', error);
-          return {};
-        }
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        return {
+          authorization: session?.access_token
+            ? `Bearer ${session.access_token}`
+            : "",
+        };
       },
     }),
   ],

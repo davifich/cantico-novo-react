@@ -8,7 +8,6 @@ import * as ScreenOrientation from 'expo-screen-orientation';
 
 import Colors from '../../constants/colors';
 import { useApp } from '../../contexts/AppContext';
-import { getPreference } from '../../lib/database';
 import { Music } from '../../types/music';
 
 // Lazy load components
@@ -44,9 +43,10 @@ export default function SongFullscreen() {
   const colors = useMemo(() => (isDarkMode ? Colors.dark : Colors.light), [isDarkMode]);
 
   const [song, setSong] = useState<Music | undefined>(undefined);
-  const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode || 'letra');
+  // O viewMode é definido uma vez e não muda mais
+  const [viewMode] = useState<ViewMode>(initialViewMode || 'letra');
   const [zoomLevel, setZoomLevel] = useState(1);
-  const [autoScroll, setAutoScroll] = useState({ isScrolling: false, speed: 5 }); // Default speed
+  const [autoScroll, setAutoScroll] = useState({ isScrolling: false, speed: 5 });
   
   const scrollRef = useRef<ScrollView>(null);
   const scrollPosition = useRef(0);
@@ -63,7 +63,7 @@ export default function SongFullscreen() {
 
   useEffect(() => {
     const scroll = () => {
-      scrollPosition.current += autoScroll.speed / 10; // Adjusted speed calculation
+      scrollPosition.current += autoScroll.speed / 10;
       scrollRef.current?.scrollTo({ y: scrollPosition.current, animated: false });
       animationFrame.current = requestAnimationFrame(scroll);
     };
@@ -84,13 +84,7 @@ export default function SongFullscreen() {
   const handleExitFullscreen = useCallback(() => { router.back(); }, [router]);
 
   const handleToggleAutoScroll = useCallback(() => {
-    setAutoScroll(prev => {
-      if (prev.isScrolling) {
-        scrollPosition.current = 0;
-        scrollRef.current?.scrollTo({ y: 0, animated: false });
-      }
-      return { ...prev, isScrolling: !prev.isScrolling };
-    });
+    setAutoScroll(prev => ({ ...prev, isScrolling: !prev.isScrolling }));
   }, []);
 
   const handleChangeScrollSpeed = useCallback((newSpeed: number) => {
@@ -101,16 +95,34 @@ export default function SongFullscreen() {
   const renderContent = () => {
     const contentProps = { ref: scrollRef, contentContainerStyle: styles.scrollContent };
     if (!song) return null;
-    if (viewMode === 'partitura' && song.has_partitura && song.file_path) {
-      return <WebView source={{ uri: song.file_path }} style={styles.pdf} />;
+
+    switch (viewMode) {
+      case 'partitura':
+        if (song.has_partitura && song.file_path) {
+          return <WebView source={{ uri: song.file_path }} style={styles.pdf} />;
+        }
+        break; 
+      case 'cifra':
+        if (song.has_cifra && song.cifra) {
+          return (
+            <Suspense fallback={<ActivityIndicator color={colors.primary} style={{ marginTop: 20}} />}>
+              <ScrollView {...contentProps}><CifraViewer content={song.cifra} zoomFactor={ZOOM_LEVELS[zoomLevel]} /></ScrollView>
+            </Suspense>
+          );
+        }
+        break;
+      case 'letra':
+        if (song.letra) {
+          return (
+            <ScrollView {...contentProps}>
+              {renderFormattedLyrics(song.letra, [styles.lyrics, { color: colors.text, fontSize: 16 * ZOOM_LEVELS[zoomLevel] }])}
+            </ScrollView>
+          );
+        }
+        break;
     }
-    if (viewMode === 'cifra' && song.has_cifra && song.cifra) {
-      return (
-        <Suspense fallback={<ActivityIndicator color={colors.primary} style={{ marginTop: 20}} />}>
-          <ScrollView {...contentProps}><CifraViewer content={song.cifra} zoomFactor={ZOOM_LEVELS[zoomLevel]} /></ScrollView>
-        </Suspense>
-      );
-    }
+
+    // Fallback: Se o modo selecionado não estiver disponível, mostra a letra.
     if (song.letra) {
       return (
         <ScrollView {...contentProps}>
@@ -118,8 +130,9 @@ export default function SongFullscreen() {
         </ScrollView>
       );
     }
+    
     return (
-      <View style={[styles.emptyCard, { backgroundColor: colors.card }]}><Text style={[styles.emptyText, { color: colors.textSecondary }]}>Nenhum conteúdo disponível.</Text></View>
+      <View style={[styles.emptyCard, { backgroundColor: colors.card }]}><Text style={[styles.emptyText, { color: colors.textSecondary }]}>Conteúdo indisponível.</Text></View>
     );
   };
 

@@ -1,7 +1,7 @@
 
 import { router } from 'expo-router';
 import { Check, Plus } from 'lucide-react-native';
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,7 @@ import {
 
 import Colors from '../constants/colors';
 import { useApp } from '../contexts/AppContext';
-import { Music } from '../types/music';
+import { Music, Category } from '../types/music';
 
 interface EditCategoryMenuProps {
   song: Music;
@@ -21,37 +21,46 @@ interface EditCategoryMenuProps {
 }
 
 const EditCategoryMenu: React.FC<EditCategoryMenuProps> = ({ song, onClose }) => {
-  const { 
-    isDarkMode, 
-    categories, 
-    addSongToCategory, 
-    removeSongFromCategory, 
-    isOnline, 
-  } = useApp();
+  const { isDarkMode, categories, updateSong } = useApp(); // CORREÇÃO: Usa `updateSong`
   const colors = isDarkMode ? Colors.dark : Colors.light;
-
-  const songCategoryIds = React.useMemo(() => new Set(song.category_ids), [song.category_ids]);
+  
+  // Estado local para gerenciar a UI de forma otimista
+  const [optimisticCategoryIds, setOptimisticCategoryIds] = useState(new Set(song.category_ids));
+  const [isUpdating, setIsUpdating] = useState(false);
 
   const handleCategoryPress = async (categoryId: number) => {
-    const isSongInCategory = songCategoryIds.has(categoryId);
-    
+    // Clona o Set para evitar mutação direta do estado
+    const newCategoryIds = new Set(optimisticCategoryIds);
+
+    if (newCategoryIds.has(categoryId)) {
+      newCategoryIds.delete(categoryId);
+    } else {
+      newCategoryIds.add(categoryId);
+    }
+
+    // Atualização otimista da UI
+    setOptimisticCategoryIds(newCategoryIds);
+    setIsUpdating(true);
+
     try {
-      if (isSongInCategory) {
-        await removeSongFromCategory(song.id, categoryId);
-      } else {
-        await addSongToCategory(song.id, categoryId);
-      }
+      // Chama a função correta do contexto
+      await updateSong(song.id, { category_ids: Array.from(newCategoryIds) });
     } catch (error) {
       console.error("Falha ao atualizar categoria da música:", error);
+      // Reverte a UI em caso de erro
+      setOptimisticCategoryIds(new Set(song.category_ids)); 
+    } finally {
+      setIsUpdating(false);
     }
   };
 
-  const renderCategoryItem = ({ item }: { item: typeof categories[0] }) => {
-    const isSelected = songCategoryIds.has(item.id);
+  const renderCategoryItem = ({ item }: { item: Category }) => {
+    const isSelected = optimisticCategoryIds.has(item.id);
     return (
       <TouchableOpacity 
         style={styles.categoryItem}
         onPress={() => handleCategoryPress(item.id)}
+        disabled={isUpdating} // Desabilita cliques durante a atualização
       >
         <View style={[styles.categoryColorIndicator, { backgroundColor: item.color }]} />
         <Text style={[styles.categoryName, { color: colors.text }]} numberOfLines={1}>
@@ -64,7 +73,10 @@ const EditCategoryMenu: React.FC<EditCategoryMenuProps> = ({ song, onClose }) =>
 
   return (
     <View style={[styles.container, { backgroundColor: colors.surface }]}>
-      <Text style={[styles.title, { color: colors.text }]}>Adicionar à Categoria</Text>
+      <View style={styles.titleContainer}>
+        <Text style={[styles.title, { color: colors.text }]}>Adicionar à Categoria</Text>
+        {isUpdating && <ActivityIndicator size="small" color={colors.primary} style={styles.activityIndicator} />}
+      </View>
       
       <FlatList
         data={categories}
@@ -79,10 +91,9 @@ const EditCategoryMenu: React.FC<EditCategoryMenuProps> = ({ song, onClose }) =>
       />
 
       <TouchableOpacity 
-        style={[styles.actionButton, { borderTopColor: colors.border, borderBottomColor: colors.border }]}
+        style={[styles.actionButton, { borderTopColor: colors.border }]}
         onPress={() => {
-          onClose(); // Fecha o menu atual
-          // CORREÇÃO: Usando a sintaxe de objeto para satisfazer a tipagem do Expo Router
+          onClose();
           router.push({ pathname: '/create-category' });
         }}
       >
@@ -97,18 +108,28 @@ const EditCategoryMenu: React.FC<EditCategoryMenuProps> = ({ song, onClose }) =>
 
 const styles = StyleSheet.create({
   container: {
-    paddingTop: 24,
+    paddingTop: 12,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
+  },
+  titleContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingTop: 12, 
+    paddingBottom: 24,
   },
   title: {
     fontSize: 18,
     fontWeight: 'bold',
     textAlign: 'center',
-    marginBottom: 16,
+  },
+  activityIndicator: {
+    marginLeft: 10,
   },
   list: {
-    maxHeight: 250, // Limita a altura da lista para telas com muitas categorias
+    maxHeight: 250,
   },
   emptyListContainer: {
     height: 100,
@@ -137,7 +158,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 20,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    marginTop: 8, // Adiciona um espaço antes do botão
   },
   actionButtonText: {
     fontSize: 16,

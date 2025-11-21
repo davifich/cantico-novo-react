@@ -87,7 +87,7 @@ function RootLayoutNav() {
         }}
       />
       <Stack.Screen
-        name="player"
+        name="karaoke"
         options={{
           title: "Estúdio de Ensaio",
           headerShown: false,

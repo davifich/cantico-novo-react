@@ -53,6 +53,12 @@ Derrama do teu sangue sobre mim
 Sei que estas aqui e isto quero eu sentir
 Derrama do teu sangue sobre mim
     `,
+    // Campos adicionados para conformidade com o tipo Music
+    last_played: null,
+    is_karaoke: false,
+    audio_uri: null,
+    bpm: null,
+    lyrics_karaoke: null,
   },
   {
     id: 2,
@@ -75,6 +81,12 @@ o sangue de Jesus tem poder para curar
 o sangue de Jesus, o sangue de Jesus
 tem poder para o oprimido libertar
     `,
+    // Campos adicionados para conformidade com o tipo Music
+    last_played: null,
+    is_karaoke: false,
+    audio_uri: null,
+    bpm: null,
+    lyrics_karaoke: null,
   },
   {
     id: 3,
@@ -107,6 +119,12 @@ Clamo a ti, meu salvador,
 Pelo teu sangue, que é vida,
 Ó bendito, vem me libertar.
     `,
+    // Campos adicionados para conformidade com o tipo Music
+    last_played: null,
+    is_karaoke: false,
+    audio_uri: null,
+    bpm: null,
+    lyrics_karaoke: null,
   },
   // Adicione mais blocos de música aqui conforme necessário.
 ];

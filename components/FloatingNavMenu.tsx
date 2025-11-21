@@ -52,7 +52,7 @@ const FloatingNavMenu = memo(() => {
   const navigateToHome = useCallback(() => router.push('/'), []);
   const navigateToImport = useCallback(() => router.push('/import'), []);
   const navigateToQuickAccess = useCallback(() => router.push('/quick-access'), []);
-  const navigateToPlayer = useCallback(() => router.push('/player'), []);
+  const navigateToKaraoke = useCallback(() => router.push('/karaoke' as any), []);
   const navigateToSettings = useCallback(() => router.push('/settings'), []);
 
   const isActive = useCallback(
@@ -99,8 +99,8 @@ const FloatingNavMenu = memo(() => {
           />
           <NavButton
             icon={Music2}
-            isActive={isActive('/player')}
-            onPress={navigateToPlayer}
+            isActive={isActive('/karaoke')}
+            onPress={navigateToKaraoke}
             colors={colors}
           />
           <NavButton

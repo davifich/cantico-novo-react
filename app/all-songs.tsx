@@ -15,29 +15,24 @@ export default function AllSongsScreen() {
   const colors = isDarkMode ? Colors.dark : Colors.light;
   const router = useRouter();
 
-  // Create a Set of song IDs in the queue for quick lookup
   const songsInQueue = useMemo(() => new Set(quickAccessSongs.map(s => s.id)), [quickAccessSongs]);
 
-  const handleAddToQueue = useCallback(
-    (songId: number) => {
-      addToQuickAccess(songId);
-    },
-    [addToQuickAccess]
-  );
-
-  const handleRemoveFromQueue = useCallback(
-    (songId: number) => {
-      removeFromQuickAccess(songId);
-    },
-    [removeFromQuickAccess]
-  );
-
-  const handleEdit = useCallback(
-    (song: Music) => {
-      router.push(`/song-form?songId=${song.id}`);
-    },
-    [router]
-  );
+  const handleAddToQueue = useCallback((songId: number) => { addToQuickAccess(songId); }, [addToQuickAccess]);
+  const handleRemoveFromQueue = useCallback((songId: number) => { removeFromQuickAccess(songId); }, [removeFromQuickAccess]);
+  const handleEdit = useCallback((song: Music) => { router.push(`/song-form?songId=${song.id}`); }, [router]);
+  
+  const handlePressKaraoke = useCallback((karaokeSong: Music) => {
+    router.push({
+      pathname: '/player',
+      params: {
+        mode: 'karaoke',
+        title: karaokeSong.title,
+        audioUri: karaokeSong.audio_uri,
+        lyricsData: JSON.stringify(karaokeSong.lyrics_karaoke),
+        bpm: karaokeSong.bpm,
+      },
+    });
+  }, [router]);
 
   const renderItem = useCallback(
     ({ item }: { item: Music }) => {
@@ -45,16 +40,18 @@ export default function AllSongsScreen() {
       return (
         <SongListItem
           song={item}
+          allSongs={songs}
           colors={colors}
           onPress={() => router.push(`/song/${item.id}`)}
           onAddToQueue={() => handleAddToQueue(item.id)}
           onRemoveFromQueue={() => handleRemoveFromQueue(item.id)}
           onEdit={() => handleEdit(item)}
-          isSongInQueue={isSongInQueue} // Pass the correct state
+          onPressKaraoke={handlePressKaraoke}
+          isSongInQueue={isSongInQueue}
         />
       );
     },
-    [colors, router, handleAddToQueue, handleRemoveFromQueue, handleEdit, songsInQueue]
+    [colors, router, handleAddToQueue, handleRemoveFromQueue, handleEdit, songsInQueue, songs, handlePressKaraoke]
   );
 
   const memoizedList = useMemo(
